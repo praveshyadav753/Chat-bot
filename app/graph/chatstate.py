@@ -23,7 +23,7 @@ class ChatState(TypedDict):
 
 
    
-  
+    document_id: str
     retrieved_docs: Optional[List[Dict[str, Any]]]
     has_document : bool
     document_ready:bool

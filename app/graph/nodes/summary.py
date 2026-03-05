@@ -4,7 +4,7 @@ from app.REG.Schema import RetrievalUser
 
 
 async def summary_node(state: ChatState) -> ChatState:
-
+    print("summary node.....")
     has_document = state.get("has_document", False)
     document_ready = state.get("document_ready", False)
     document_id = state.get("document_id")
@@ -58,7 +58,7 @@ async def summary_node(state: ChatState) -> ChatState:
     full_text = "\n\n".join(chunk["content"] for chunk in chunks)
 
     prompt = f"""
-You are a professional document summarization assistant.
+You are a professional document summarization assistant. if content not provided just say i dont have content
 
 User Request:
 {user_request}
@@ -81,3 +81,5 @@ DOCUMENT CONTENT:
         "user_input": prompt,
         "summary_mode": True
     }
+
+  

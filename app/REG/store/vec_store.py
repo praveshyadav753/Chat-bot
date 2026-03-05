@@ -22,7 +22,7 @@ def get_vectorstore():
 
 
 
-async def store_documents(docs):
+def store_documents(docs):
     vectorstore = get_vectorstore()
     vectorstore.add_documents(docs)
     vectorstore.persist()

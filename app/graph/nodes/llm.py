@@ -4,6 +4,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 
 
 async def llm_node(state: ChatState) -> ChatState:
+    print("llm_node....")
     try:
         query = state.get("user_input")
         context = state.get("context")

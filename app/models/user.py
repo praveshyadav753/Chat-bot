@@ -2,6 +2,7 @@ from sqlalchemy import (
     Column, Integer, String, Boolean,
     DateTime, Enum, Text
 )
+from sqlalchemy.orm import relationship
 from .connection import Base
 from sqlalchemy.sql import func
 import enum
@@ -57,6 +58,7 @@ class User(Base):
         onupdate=func.now(),
         nullable=False
     )
+    documents = relationship("Document", back_populates="user")
 
     def __repr__(self):
         return f"<User id={self.id} email={self.email} role={self.role}>"

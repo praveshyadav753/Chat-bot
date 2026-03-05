@@ -65,7 +65,7 @@ User Query:
 async def classifier_node(state: ChatState) -> ChatState:
     
     
-
+    print("classifier_node......")
     intent = await classify_intent(
         query=state["user_input"],
         has_document=state["has_document"],

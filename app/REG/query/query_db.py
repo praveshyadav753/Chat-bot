@@ -84,6 +84,7 @@ async def get_document_chunks(document_id: str, user:RetrievalUser):
         }
     )
 
+
     if not results or not results.get("documents"):
         return []
 

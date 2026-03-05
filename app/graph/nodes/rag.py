@@ -13,7 +13,7 @@ def build_context_text(docs):
     )
 
 async def rag_node(state: ChatState) -> ChatState :
-
+    print("reg_node..")
     query = state.get("user_input")
     user_id = state.get("user_id")
 

@@ -10,7 +10,7 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 
 
-async def process_document(
+def process_document(
     file_path: str,
     document_id: str,
     user_id: int,

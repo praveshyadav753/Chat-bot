@@ -6,7 +6,7 @@ from app.models.connection import AsyncSessionLocal
 
 
 async def get_document_status_flags(session_id: str, user_id: int):
-
+    print("document_context_node....")
     async with AsyncSessionLocal() as db:
         result = await db.execute(
             select(Document).where(
