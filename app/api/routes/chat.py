@@ -60,7 +60,8 @@ async def stream_chat(
              )
 
             db.add(new_doc)
-            await db.commit()        
+            await db.commit()     
+
             print("initiating data storage")
             store_rag_doc.delay(
                 file_path=file_path,
@@ -75,12 +76,15 @@ async def stream_chat(
     initial_state: ChatState = {
         "user_input": message,
         "user_id": user.id,
+        "access_level":user.access_level,
+        "department":user.department,
         "session_id": session_id,
         "blocked": False,
         "intent": None,
         "context": None,
         "retrieved_docs": [],
         "final_response": None,
+        
     }
 
     async def event_generator():

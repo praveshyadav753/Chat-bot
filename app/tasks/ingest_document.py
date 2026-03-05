@@ -1,6 +1,6 @@
 import fastapi.security.utils
 import logging
-from app.models.connection import async_session_maker
+from app.models.connection import AsyncSessionLocal
 from celery.utils.log import get_task_logger
 from app.REG.store.parsedoc import process_document
 import asyncio
@@ -50,7 +50,7 @@ def store_rag_doc(
     department: str,
 ):
     async def run():
-        async with async_session_maker() as db:
+        async with AsyncSessionLocal() as db:
             try:
                 logger.warning("Processing document...")
 

@@ -8,11 +8,14 @@ class ChatState(TypedDict):
     
     messages: Annotated[list, add_messages]
     user_input: str
+    prompt :str 
     final_response: Optional[str]
 
   
     user_id: str
     session_id: str
+    access_level:int
+    department : str
 
   
     intent: Optional[str]  # RAG | TOOL | DIRECT_LLM
@@ -22,8 +25,9 @@ class ChatState(TypedDict):
    
   
     retrieved_docs: Optional[List[Dict[str, Any]]]
-    doc_available : bool
-        
+    has_document : bool
+    document_ready:bool
+
     context: Optional[str]
     retrieval_confidence: Optional[float]
 

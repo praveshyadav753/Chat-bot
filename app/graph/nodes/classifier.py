@@ -1,9 +1,9 @@
-# graph/nodes/classifier_node.py
-
 from enum import Enum
-# from app.security.models import GuardrailResult
 from app.graph.chatstate import ChatState
 from app.graph.model import LLMFactory
+# from app.models.connection import AsyncSessionLocal
+from app.models.document import Document
+from sqlalchemy import select
 
 
 class Intent(str, Enum):
@@ -15,45 +15,64 @@ class Intent(str, Enum):
     OUT_OF_SCOPE = "out_of_scope"
 
 
-llm = LLMFactory.create_llm(
-    provider="gemini",
-    model="gemini-2.5-flash-lite", 
-    temperature=0
-)
+async def classify_intent(
+    query: str,
+    has_document: bool,
+    document_ready: bool,
+) -> Intent:
 
-async def classify_intent( query: str, ) -> Intent:
+    llm = LLMFactory.create_llm(
+        provider="gemini",
+        model="gemini-2.5-flash-lite",
+        temperature=0,
+    )
+
     prompt = f"""
-    Classify the user query into one of the following categories:
+You are an intent classifier for a RAG-based system.
 
-    - factual (requires document retrieval)
-    - summary (if user has gives document and include commands like summarize  and similar intent)
-    - comparison (requires multiple document retrieval)
-    - conversation (general chat, no retrieval)
-    - tool (requires calculator or external API)
-    - out_of_scope
+System Context:
+- User has uploaded document: {has_document}
+- Document processing completed: {document_ready}
 
-    Respond with ONLY one category.
+Rules:
+- If user asks to summarize but no document is available → return conversation
+- If document exists and user asks to summarize → return summary
+- If document exists but not ready → return conversation
+- If user asks factual question about document → return factual
+- If general chat → return conversation
+- If calculation or API needed → return tool
+- If outside domain → return out_of_scope
 
-    Query:
-    {query} {document_for_summary}
-    """
+Return ONLY one category:
+factual | summary | comparison | conversation | tool | out_of_scope
+
+User Query:
+{query}
+"""
 
     response = await llm.ainvoke(prompt)
     label = response.content.strip().lower()
 
-    try:
-        return Intent(label)
-    except:
-        return Intent.CONVERSATION
-    
+    for intent in Intent:
+        if intent.value in label:
+            return intent
+
+    return Intent.CONVERSATION
+
+
+
 
 async def classifier_node(state: ChatState) -> ChatState:
+    
+    
+
     intent = await classify_intent(
-        state["user_input"]
+        query=state["user_input"],
+        has_document=state["has_document"],
+        document_ready=["document_ready"],
     )
-    print("classifier node-->")
+
     return {
         **state,
-        "intent": intent.value
+        "intent": intent.value,
     }
-

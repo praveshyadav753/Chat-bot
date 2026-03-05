@@ -7,6 +7,7 @@ async def llm_node(state: ChatState) -> ChatState:
     try:
         query = state.get("user_input")
         context = state.get("context")
+        
 
         if not query:
             state["final_response"] = "Invalid request."

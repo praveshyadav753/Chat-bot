@@ -13,7 +13,9 @@ def route_by_intent(state: ChatState):
 
     if intent == "factual":
         return "rag_node"
-
+    if intent =="summary":
+        return "summary_node"
+        
     if intent == "comparison":
         return "comparison_rag_node"
 

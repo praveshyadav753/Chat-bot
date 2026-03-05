@@ -3,6 +3,7 @@
 from .utility import get_reranker,retrieve_context
 from app.REG.Schema import RetrievalQuery,RetrievalUser
 from app.core.config import settings
+from app.REG.store.vec_store import get_vectorstore
 
 _reranker_instance = None
 
@@ -43,23 +44,54 @@ async def Retrievel_pipeline(request: RetrievalQuery, user: RetrievalUser):
     ]
 
 
-if __name__ == "__main__":
-    import asyncio
-    from app.REG.Schema import RetrievalQuery, RetrievalUser
+# if __name__ == "__main__":
+#     import asyncio
+#     from app.REG.Schema import RetrievalQuery, RetrievalUser
 
-    test_request = RetrievalQuery(
-        query="What is llm?"
+#     test_request = RetrievalQuery(
+#         query="What is llm?"
+#     )
+
+#     test_user = RetrievalUser(
+#         user_id=1,
+#         access_level=2,
+#         department="general",
+#         role="user"
+#     )
+
+#     result = asyncio.run(
+#         Retrievel_pipeline(test_request, test_user)
+#     )
+
+#     print(result)
+
+
+
+
+async def get_document_chunks(document_id: str, user:RetrievalUser):
+
+    store = get_vectorstore()
+
+    results = store._collection.get(
+        where={
+            "$and": [
+                {"document_id": document_id},
+                {"user_id": user.user_id},
+                {"access_level": {"$lte": user.access_level}},
+                {"department": user.department},
+                {"classification": "internal"},
+            ]
+        }
     )
 
-    test_user = RetrievalUser(
-        user_id=1,
-        access_level=2,
-        department="general",
-        role="user"
-    )
+    if not results or not results.get("documents"):
+        return []
 
-    result = asyncio.run(
-        Retrievel_pipeline(test_request, test_user)
-    )
-
-    print(result)
+    return [
+        {
+            "content": doc,
+            "page_number": meta.get("page_number", 0),
+            "document_id": meta.get("document_id"),
+        }
+        for doc, meta in zip(results["documents"], results["metadatas"])
+    ]
