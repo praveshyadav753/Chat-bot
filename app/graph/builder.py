@@ -1,0 +1,51 @@
+from langgraph.graph import START, END, StateGraph
+from app.graph.chatstate import ChatState
+
+from app.graph.nodes.input_guardrails import input_guardrail_node
+from app.graph.nodes.classifier import classifier_node
+from app.graph.nodes.llm import llm_node
+from app.graph.nodes.rag import rag_node
+from app.graph.nodes.reject import reject_node
+
+from app.graph.routes import guardrail_router, route_by_intent
+
+
+builder = StateGraph(ChatState)
+
+# Add nodes
+builder.add_node("input_guardrails", input_guardrail_node)
+builder.add_node("classify", classifier_node)
+builder.add_node("rag_node", rag_node)
+builder.add_node("llm_node", llm_node)
+builder.add_node("reject", reject_node)
+
+# Entry edge
+builder.add_edge(START, "input_guardrails")
+
+# Guardrail routing
+builder.add_conditional_edges(
+    "input_guardrails",
+    guardrail_router,
+    {
+        "reject": "reject",
+        "classify": "classify",
+    },
+)
+
+# Intent routing
+builder.add_conditional_edges(
+    "classify",
+    route_by_intent,
+    {
+        "rag_node": "rag_node",
+        "llm_node": "llm_node",
+        "reject": "reject",
+    },
+)
+
+# Terminal edges
+builder.add_edge("rag_node", "llm_node")
+builder.add_edge("llm_node", END)
+builder.add_edge("reject", END)
+
+graph = builder.compile()

@@ -1,0 +1,65 @@
+# from typing import Annotated
+# from app.REG.Schema import RetrievalQuery
+from .utility import get_reranker,retrieve_context
+from app.REG.Schema import RetrievalQuery,RetrievalUser
+from app.core.config import settings
+
+_reranker_instance = None
+
+async def Retrievel_pipeline(request: RetrievalQuery, user: RetrievalUser):
+
+    results = await retrieve_context(request,user)
+
+    docs = [doc for doc,_ in results]
+    reranker = get_reranker()
+    pairs = [(request.query, doc.page_content) for doc in docs]
+
+    scores = reranker.predict(pairs)
+
+    reranked = sorted(
+        zip(docs, scores),
+        key=lambda x: x[1],
+        reverse=True
+    )
+
+    valid = [
+        (doc, score)
+        for doc, score in reranked
+        if score >= settings.SIMILARITY_THRESHOLD
+    ]
+
+    if not valid:
+        return []
+    
+    return [
+        {
+            "content": doc.page_content,
+            "source": doc.metadata["source"],
+            "page_number": doc.metadata["page_number"],
+            "document_id": doc.metadata["document_id"],
+            "score": score
+        }
+        for doc, score in valid[:settings.max_context_chunks]
+    ]
+
+
+if __name__ == "__main__":
+    import asyncio
+    from app.REG.Schema import RetrievalQuery, RetrievalUser
+
+    test_request = RetrievalQuery(
+        query="What is llm?"
+    )
+
+    test_user = RetrievalUser(
+        user_id=1,
+        access_level=2,
+        department="general",
+        role="user"
+    )
+
+    result = asyncio.run(
+        Retrievel_pipeline(test_request, test_user)
+    )
+
+    print(result)

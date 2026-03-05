@@ -1,0 +1,204 @@
+{% extends "base.html" %} {% block content %}
+
+<div class="w-full max-w-2xl mx-auto mt-5 bg-white p-6 rounded shadow">
+  <!-- Chat Box -->
+  <div
+    id="chat-box"
+    class="h-96 overflow-y-auto border p-4 rounded bg-gray-50"
+  ></div>
+
+  <!-- Form -->
+  <form onsubmit="sendMessage(event)" class="mt-4 flex items-center gap-3">
+    <!-- Hidden File Input -->
+    <input
+      type="file"
+      id="documents"
+      name="documents"
+      multiple
+      class="hidden"
+    />
+
+    <!-- Upload Icon -->
+    <button
+      type="button"
+      onclick="document.getElementById('documents').click()"
+      class="p-2 rounded hover:bg-gray-300 transition"
+      title="Upload Documents"
+    >
+      📎
+    </button>
+
+    <!-- Message Input -->
+    <input
+      name="message"
+      id="message"
+      class="flex-1 border p-2 rounded focus:outline-none focus:ring-2 focus:ring-blue-400"
+      placeholder="Ask something..."
+      
+    />
+
+    <!-- Send Button -->
+    <button
+      id="send-btn"
+      class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 transition"
+    >
+      Send
+    </button>
+  </form>
+
+  <!-- File Preview -->
+  <div id="file-preview" class="mt-2 text-sm text-gray-600"></div>
+</div>
+
+<script>
+let session_id = null;
+
+const fileInput = document.getElementById("documents");
+const preview = document.getElementById("file-preview");
+const chatBox = document.getElementById("chat-box");
+const sendBtn = document.getElementById("send-btn");
+
+// -------------------------
+// Escape HTML (for USER only)
+// -------------------------
+function escapeHTML(str) {
+  return str.replace(/[&<>"']/g, function (m) {
+    return {
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#39;",
+    }[m];
+  });
+}
+
+// -------------------------
+// File Preview
+// -------------------------
+fileInput.addEventListener("change", function () {
+  preview.innerHTML = "";
+
+  if (fileInput.files.length > 0) {
+    preview.innerHTML = "<strong>Selected:</strong><br>";
+    for (let file of fileInput.files) {
+      preview.innerHTML += "📄 " + escapeHTML(file.name) + "<br>";
+    }
+  }
+});
+
+// -------------------------
+// Main Send Function
+// -------------------------
+async function sendMessage(e) {
+  e.preventDefault();
+
+  const input = document.getElementById("message");
+  const message = input.value.trim();
+  if (!message) return;
+
+  sendBtn.disabled = true;
+  sendBtn.classList.add("opacity-50");
+
+  // -------------------------
+  // Add User Message
+  // -------------------------
+  const userDiv = document.createElement("div");
+  userDiv.classList.add("mb-3");
+  userDiv.innerHTML = `
+    <div class="font-semibold text-blue-600">You:</div>
+    <div>${escapeHTML(message)}</div>
+  `;
+  chatBox.appendChild(userDiv);
+
+  // -------------------------
+  // Create Bot Message Container
+  // -------------------------
+  const botDiv = document.createElement("div");
+  botDiv.classList.add("mb-3");
+  botDiv.innerHTML = `
+    <div class="font-semibold text-gray-700">Bot:</div>
+    <div class="prose max-w-none" id="bot-response"></div>
+  `;
+  chatBox.appendChild(botDiv);
+
+  const botResponseDiv = botDiv.querySelector("#bot-response");
+
+  // -------------------------
+  // Prepare Form Data
+  // -------------------------
+  const formData = new FormData();
+  formData.append("message", message);
+
+  if (session_id) {
+    formData.append("session_id", session_id);
+  }
+
+  for (let i = 0; i < fileInput.files.length; i++) {
+    formData.append("documents", fileInput.files[i]);
+  }
+
+  input.value = "";
+  fileInput.value = "";
+  preview.innerHTML = "";
+
+  // -------------------------
+  // Streaming Logic
+  // -------------------------
+  try {
+    const response = await fetch("/api/chat/stream", {
+      method: "POST",
+      body: formData,
+      credentials: "include" 
+    });
+
+    if (!response.body) throw new Error("No response body");
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+
+    let fullResponse = "";
+    let buffer = "";
+
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+
+      // Decode streaming chunk
+      buffer += decoder.decode(value, { stream: true });
+
+      // Split lines safely
+      const lines = buffer.split(/\r?\n/);
+      buffer = lines.pop(); // keep incomplete line
+
+      for (let line of lines) {
+        if (line.startsWith("data: ")) {
+          const data = line.replace("data: ", "").trim();
+          if (!data) continue;
+
+          // Session Handling
+          if (data.startsWith("SESSION:")) {
+            session_id = data.replace("SESSION:", "");
+          } else {
+            fullResponse += data;
+
+            // Markdown Render
+            botResponseDiv.innerHTML = marked.parse(fullResponse);
+          }
+        }
+      }
+
+      // Auto-scroll
+      chatBox.scrollTop = chatBox.scrollHeight;
+    }
+  } catch (error) {
+    botResponseDiv.innerHTML =
+      "<span class='text-red-500'>Connection error.</span>";
+  }
+
+  sendBtn.disabled = false;
+  sendBtn.classList.remove("opacity-50");
+}
+</script>
+
+{% endblock %}

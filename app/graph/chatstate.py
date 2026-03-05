@@ -1,0 +1,46 @@
+from typing import TypedDict, List, Optional, Dict, Any
+from typing_extensions import Annotated
+from langgraph.graph import add_messages
+# from model import llm
+
+
+class ChatState(TypedDict):
+    
+    messages: Annotated[list, add_messages]
+    user_input: str
+    final_response: Optional[str]
+
+  
+    user_id: str
+    session_id: str
+
+  
+    intent: Optional[str]  # RAG | TOOL | DIRECT_LLM
+    requires_retrieval: bool
+
+
+   
+  
+    retrieved_docs: Optional[List[Dict[str, Any]]]
+    doc_available : bool
+        
+    context: Optional[str]
+    retrieval_confidence: Optional[float]
+
+    
+    tool_calls: Optional[List[Dict[str, Any]]]
+    tool_results: Optional[List[str]]
+
+   
+    is_valid: Optional[bool]
+
+    requires_approval: bool
+    approved: Optional[bool]
+
+    injection_detected: bool
+    out_of_scope: bool
+    validation_error: Optional[str]
+   
+    cache_hit: bool
+    status: str  # STARTED | CLASSIFIED | RETRIEVED | RERANKED | GENERATED | VALIDATED | TOOL_RUNNING | WAITING_APPROVAL | COMPLETED | ERROR
+    error: Optional[str]

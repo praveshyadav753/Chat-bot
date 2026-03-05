@@ -1,0 +1,10 @@
+name: chatbot
+services:
+  db: 
+    image: postgres:15
+    environment:
+      POSTGRES_DB: chatbot
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: pass
+  redis:
+    image: redis:7    
