@@ -26,7 +26,8 @@ def publish_status(document_id: str, status: str, session_id: str):
     }
 
     redis_client.publish(
-        f"document_status:{session_id}",
+        # f"document_status:{session_id}",
+        "document_status",
         json.dumps(payload)
     )
 
@@ -55,7 +56,7 @@ def store_rag_doc(
         doc.status = "PROCESSING"
         db.commit()
 
-        publish_status(document_id, "PROCESSING", session_id)
+        publish_status(document_id, "PROCESSING", session_id="1")
 
         # 🔹 Parse document
         docs = process_document(

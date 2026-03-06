@@ -15,7 +15,8 @@ async def event_stream():
     async def event_generator():
 
         pubsub = redis_client.pubsub()
-        await pubsub.subscribe("events")
+        # await pubsub.subscribe(f"document_status:{session_id}")
+        await pubsub.subscribe("document_status")
 
         async for message in pubsub.listen():
 

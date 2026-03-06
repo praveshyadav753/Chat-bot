@@ -1,4 +1,5 @@
 import os
+import json
 from typing import List, Optional
 from uuid import uuid4
 from app.models.connection import get_db
@@ -34,10 +35,12 @@ async def stream_chat(
     """
     Stream chat responses via Server-Sent Events (SSE).
     
+    Properly handles multiline responses by encoding them as JSON.
+    
     Yields:
-        - data: SESSION:{session_id}\n\n - Session ID sent at start
-        - data: {full_response}\n\n - Complete response content
-        - data: [END]\n\n - End marker when complete
+        - data: SESSION:{session_id}\n\n - Session ID (control message)
+        - data: {"content": "..."}\n\n - Response content as JSON (single line)
+        - data: [END]\n\n - End marker
     """
     # Generate or use existing session ID
     session_id = session_id or str(uuid4())
@@ -57,40 +60,44 @@ async def stream_chat(
 
     async def event_generator():
         try:
-            # ✅ FIX 1: Send session ID at start with proper SSE format
+            # ✅ Step 1: Send session ID as control message
+            # This is NOT displayed - frontend filters it out
             yield f"data: SESSION:{session_id}\n\n"
             
-            response_received = False  # ✅ FIX 2: Track if we got a response
+            response_received = False
             
             async for step in graph.astream(initial_state):
-                # ✅ FIX 3: Check for request disconnection INSIDE the loop
+                # ✅ Check for disconnection first
                 if await request.is_disconnected():
-                    print("Client disconnected during streaming")
+                    print("Client disconnected")
                     break
                 
                 for node_name, state in step.items():
-                    # ✅ FIX 4: Properly check for final response
                     if node_name == "llm_node" and state.get("final_response"):
                         response_text = state["final_response"]
                         
-                        # ✅ FIX 5: Only yield once per response (not multiple times)
+                        # ✅ Only yield once
                         if not response_received:
-                            print(f"LLM Response received: {len(response_text)} characters")
+                            print(f"LLM Response: {len(response_text)} characters")
                             
-                            # ✅ FIX 6: Properly escape special characters in response
-                            # Remove any trailing newlines/spaces that might break SSE format
-                            response_text = response_text.strip()
+                            # ✅ CRITICAL FIX: Encode response as JSON to preserve formatting
+                            # This ensures multiline text is sent as a single SSE event
+                            # without breaking the SSE format
+                            response_json = json.dumps({
+                                "content": response_text.strip()
+                            })
                             
-                            # Send the complete response as a single SSE event
-                            yield f"data: {response_text}\n\n"
+                            # ✅ Send as single-line JSON (no internal newlines to break SSE)
+                            yield f"data: {response_json}\n\n"
                             response_received = True
 
-            # ✅ FIX 7: Send end marker AFTER the loop completes
+            # ✅ Step 2: Send completion marker
             yield f"data: [END]\n\n"
 
         except Exception as e:
             print(f"Chat streaming error: {e}")
-            # Send error marker
+            import traceback
+            traceback.print_exc()
             yield f"data: [ERROR]\n\n"
 
     return EventSourceResponse(event_generator())
