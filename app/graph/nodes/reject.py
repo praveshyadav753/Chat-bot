@@ -8,7 +8,7 @@ def reject_node(state: ChatState) -> ChatState:
     Final node when request is blocked .
     """
 
-    reasons = state.get("reasons", [])
+    reasons = state.get("block_reason", state.get("reasons", []))   
     severity = state.get("severity", "medium")
 
     # Safe user-facing message

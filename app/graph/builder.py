@@ -12,15 +12,15 @@ from app.graph.nodes.summary import summary_node
 
 from app.graph.routes import guardrail_router, route_by_intent
 from app.graph.utils import message_router
-from app.graph.nodes.load_memory import load_state_node
+from app.graph.nodes.memory_loder import load_state_node
 
 
 builder = StateGraph(ChatState)
 
 # Add nodes
 builder.add_node("load_state", load_state_node)
-builder.add_node("check_messages_length", check_message_length_node)
 builder.add_node("input_guardrails", input_guardrail_node)
+builder.add_node("check_messages_length", check_message_length_node)
 builder.add_node("document_context", document_context_node)
 builder.add_node("classify", classifier_node)
 builder.add_node("rag_node", rag_node)
@@ -49,11 +49,10 @@ builder.add_conditional_edges(
     message_router,
     {
         "summary_node": "summary_node",
-        "intent_classifier": "classify"
+        "intent_classifier": "document_context"
     },
 )
 
-builder.add_edge("classify", "document_context")
 builder.add_edge("document_context", "classify")
 
 builder.add_conditional_edges(

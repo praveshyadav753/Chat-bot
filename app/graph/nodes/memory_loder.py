@@ -1,6 +1,6 @@
 from sqlalchemy import select
 from app.models.connection import AsyncSessionLocal
-from app.models import Message, Document
+from app.models import Message, Document, ChatSession
 from app.graph.chatstate import ChatState
 from langchain_core.messages import HumanMessage, AIMessage
 
@@ -31,6 +31,10 @@ async def load_state_node(state: ChatState) -> ChatState:
             else:
                 chat_messages.append(AIMessage(content=msg.content))
 
+        result = await db.execute(
+            select(ChatSession.summary).where(ChatSession.id == session_id)
+        )
+        summary = result.scalar_one_or_none()
         # Load documents
         docs_result = await db.execute(
             select(Document).where(Document.session_id == session_id)
@@ -39,8 +43,9 @@ async def load_state_node(state: ChatState) -> ChatState:
 
     return {
         **state,
-        "messages": chat_messages,  
+        "messages": chat_messages,
+        "summary": summary,
         "documents": documents,
         "documents_ready": all(doc.status == "processed" for doc in documents),
-        "has_document": len(documents) > 0
+        "has_document": len(documents) > 0,
     }

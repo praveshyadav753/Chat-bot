@@ -47,7 +47,7 @@ class ChatState(TypedDict):
 
     requires_approval: bool
     approved: Optional[bool]
-
+    block_reason:str    
     injection_detected: bool
     out_of_scope: bool
     validation_error: Optional[str]

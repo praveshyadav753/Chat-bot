@@ -69,7 +69,7 @@ async def classifier_node(state: ChatState) -> ChatState:
     intent = await classify_intent(
         query=state["user_input"],
         has_document=state["has_document"],
-        document_ready=["document_ready"],
+        document_ready=state.get("document_ready", False),
     )
 
     return {

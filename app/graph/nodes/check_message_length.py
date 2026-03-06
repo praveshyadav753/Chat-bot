@@ -2,8 +2,8 @@ from app.graph.chatstate import ChatState
 from langchain_core.messages import HumanMessage, AIMessage
 
 
-MAX_HISTORY_MESSAGES = 30
-MESSAGES_TO_KEEP = 10
+MAX_HISTORY_MESSAGES = 10
+MESSAGES_TO_KEEP = 5
 
 
 async def check_message_length_node(state: ChatState) -> ChatState:
