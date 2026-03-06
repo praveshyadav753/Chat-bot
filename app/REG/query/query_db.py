@@ -1,6 +1,8 @@
 # from typing import Annotated
 # from app.REG.Schema import RetrievalQuery
-from .utility import get_reranker,retrieve_context
+import asyncio
+
+from app.REG.query.utility import get_reranker,retrieve_context
 from app.REG.Schema import RetrievalQuery,RetrievalUser
 from app.core.config import settings
 from app.REG.store.vec_store import get_vectorstore
@@ -76,7 +78,7 @@ async def get_document_chunks(document_id: str, user:RetrievalUser):
         where={
             "$and": [
                 {"document_id": document_id},
-                {"user_id": user.user_id},
+                {"uploaded_by": user.user_id},
                 {"access_level": {"$lte": user.access_level}},
                 {"department": user.department},
                 {"classification": "internal"},
@@ -84,7 +86,7 @@ async def get_document_chunks(document_id: str, user:RetrievalUser):
         }
     )
 
-
+    print(results)
     if not results or not results.get("documents"):
         return []
 
@@ -96,3 +98,8 @@ async def get_document_chunks(document_id: str, user:RetrievalUser):
         }
         for doc, meta in zip(results["documents"], results["metadatas"])
     ]
+
+# if __name__ == "__main__":
+#     user = RetrievalUser(user_id=2,access_level=1,department="general",role="moderate")
+#     result= asyncio.run( get_document_chunks("2efca688-634b-43da-bf7d-ab714d8adbf3",user))
+#     print(result)

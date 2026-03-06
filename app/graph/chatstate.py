@@ -7,6 +7,13 @@ from langgraph.graph import add_messages
 class ChatState(TypedDict):
     
     messages: Annotated[list, add_messages]
+    summary: Optional[str]
+
+
+    summary_type: Optional[str]   # document | conversation
+    conversation_messages: Optional[list]
+    session_summary: Optional[str]
+    need_conversation_summary: bool
     user_input: str
     prompt :str 
     final_response: Optional[str]

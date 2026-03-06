@@ -8,6 +8,7 @@ from fastapi.templating import Jinja2Templates
 from app.api.routes.auth import auth_route
 from app.api.routes.chat import chat_router
 from app.models import document, user
+from app.api.routes import documents, update__event
 from app.models.connection import engine, get_db, init_db
 
 
@@ -28,7 +29,8 @@ templates = Jinja2Templates(directory="app/templates")
 # ------------------------------------------------------------------------
 app.include_router(chat_router)
 app.include_router(auth_route)
-
+app.include_router(documents.router)
+app.include_router(update__event.router)
 # ------------------------------------------------------------------------
 
 

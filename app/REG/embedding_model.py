@@ -1,6 +1,6 @@
 # embeddings_factory.py
 
-from langchain_community.embeddings import HuggingFaceEmbeddings
+from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_openai import OpenAIEmbeddings
 
 _embeddings_instance = None

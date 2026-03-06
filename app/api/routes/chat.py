@@ -29,50 +29,11 @@ async def stream_chat(
     user=Depends(get_current_active_user),
     message: str = Form(...),
     session_id: Optional[str] = Form(None),
-    documents: Optional[List[UploadFile]] = File(None),
     db=Depends(get_db)
 ):
 
     session_id = session_id or str(uuid4())
-
-    UPLOAD_DIR = "uploads"
-
-    if documents:
-        os.makedirs(UPLOAD_DIR, exist_ok=True)
-        
-        for file in documents:
-            file_id = str(uuid4())
-            file_path = os.path.join(UPLOAD_DIR, f"{file_id}_{file.filename}")
-
-          
-            async with aiofiles.open(file_path, "wb") as out_file:
-                while chunk := await file.read(1024 * 1024):  # 1MB chunks
-                    await out_file.write(chunk)
-            new_doc = Document(
-            id=file_id,
-            filename=file.filename,
-            file_path=file_path,
-            uploaded_by=user.id,
-            session_id=session_id,
-            access_level=user.access_level,
-            department=user.department,
-            status="PROCESSING",
-             )
-
-            db.add(new_doc)
-            await db.commit()     
-
-            print("initiating data storage")
-            store_rag_doc.delay(
-                file_path=file_path,
-                document_id=file_id,
-                user_id=user.id,
-                session_id=session_id,
-                access_level=user.access_level,
-                department=user.department,
-            )
-        
-                
+                        
     initial_state: ChatState = {
         "user_input": message,
         "user_id": user.id,

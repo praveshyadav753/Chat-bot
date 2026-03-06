@@ -1,6 +1,7 @@
 from langgraph.graph import START, END, StateGraph
 from app.graph.chatstate import ChatState
 
+from app.graph.nodes.check_message_length import check_message_length_node
 from app.graph.nodes.document_context import document_context_node
 from app.graph.nodes.input_guardrails import input_guardrail_node
 from app.graph.nodes.classifier import classifier_node
@@ -8,14 +9,19 @@ from app.graph.nodes.llm import llm_node
 from app.graph.nodes.rag import rag_node
 from app.graph.nodes.reject import reject_node
 from app.graph.nodes.summary import summary_node
+
 from app.graph.routes import guardrail_router, route_by_intent
+from app.graph.utils import message_router
+from app.graph.nodes.load_memory import load_state_node
 
 
 builder = StateGraph(ChatState)
 
 # Add nodes
+builder.add_node("load_state", load_state_node)
+builder.add_node("check_messages_length", check_message_length_node)
 builder.add_node("input_guardrails", input_guardrail_node)
-builder.add_node("document_context",document_context_node)
+builder.add_node("document_context", document_context_node)
 builder.add_node("classify", classifier_node)
 builder.add_node("rag_node", rag_node)
 builder.add_node("summary_node", summary_node)
@@ -23,7 +29,10 @@ builder.add_node("llm_node", llm_node)
 builder.add_node("reject", reject_node)
 
 # Entry edge
-builder.add_edge(START, "input_guardrails")
+builder.add_edge(START, "load_state")
+
+# Load memory → guardrail
+builder.add_edge("load_state", "input_guardrails")
 
 # Guardrail routing
 builder.add_conditional_edges(
@@ -31,26 +40,35 @@ builder.add_conditional_edges(
     guardrail_router,
     {
         "reject": "reject",
-        "classify": "document_context",
+        "classify": "check_messages_length",
     },
 )
+
+builder.add_conditional_edges(
+    "check_messages_length",
+    message_router,
+    {
+        "summary_node": "summary_node",
+        "intent_classifier": "classify"
+    },
+)
+
+builder.add_edge("classify", "document_context")
 builder.add_edge("document_context", "classify")
-# Intent routing
+
 builder.add_conditional_edges(
     "classify",
     route_by_intent,
     {
         "rag_node": "rag_node",
         "llm_node": "llm_node",
-        "summary_node":"summary_node",
+        "summary_node": "summary_node",
         "reject": "reject",
     },
 )
 
-# Terminal edges
 builder.add_edge("rag_node", "llm_node")
 builder.add_edge("summary_node", "llm_node")
-
 builder.add_edge("llm_node", END)
 builder.add_edge("reject", END)
 

@@ -26,7 +26,7 @@ class Document(Base):
 
     status = Column(String(20), default="PROCESSING", nullable=False)
 
-    session_id = Column(String, nullable=True, index=True)
+    session_id = Column(String, ForeignKey("chat_sessions.id"))
 
     created_at = Column(
         DateTime(timezone=True),

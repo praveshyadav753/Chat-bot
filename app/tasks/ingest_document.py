@@ -4,8 +4,31 @@ from app.REG.store.parsedoc import process_document
 from app.REG.store.vec_store import store_documents
 from app.celery_app import celery_app
 from app.models.document import Document
+from typing import Optional
+
+import redis
+import json
 
 logger = get_task_logger(__name__)
+
+# Redis client for pub/sub
+redis_client = redis.Redis(host="localhost", port=6379, db=0)
+
+
+def publish_status(document_id: str, status: str, session_id: str):
+    """
+    Publish document status update to Redis
+    """
+    payload = {
+        "document_id": document_id,
+        "status": status,
+        "session_id": session_id,
+    }
+
+    redis_client.publish(
+        f"document_status:{session_id}",
+        json.dumps(payload)
+    )
 
 
 @celery_app.task(bind=True)
@@ -14,7 +37,7 @@ def store_rag_doc(
     file_path: str,
     document_id: str,
     user_id: int,
-    session_id: str,
+    session_id: Optional[str],
     access_level: int,
     department: str,
 ):
@@ -28,10 +51,13 @@ def store_rag_doc(
             logger.error("Document not found in DB")
             return False
 
+        # 🔹 Update status
         doc.status = "PROCESSING"
         db.commit()
 
-        # 🔹 Make these functions SYNC
+        publish_status(document_id, "PROCESSING", session_id)
+
+        # 🔹 Parse document
         docs = process_document(
             file_path,
             document_id,
@@ -43,12 +69,19 @@ def store_rag_doc(
         if not docs:
             doc.status = "FAILED"
             db.commit()
+
+            publish_status(document_id, "FAILED", session_id)
+
             return False
 
+        # 🔹 Store embeddings
         store_documents(docs)
 
+        # 🔹 Mark ready
         doc.status = "READY"
         db.commit()
+
+        publish_status(document_id, "READY", session_id)
 
         logger.warning("Document stored successfully")
         return True
@@ -59,6 +92,8 @@ def store_rag_doc(
         if "doc" in locals() and doc:
             doc.status = "FAILED"
             db.commit()
+
+            publish_status(document_id, "FAILED", session_id)
 
         raise e
 

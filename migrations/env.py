@@ -25,6 +25,7 @@ from app.models import  *
 config.set_main_option("sqlalchemy.url",getenv("DATABASE_URL1"))
 
 target_metadata = Base.metadata
+print("Detected tables:", Base.metadata.tables.keys())
 
 # other values from the config, defined by the needs of env.py,
 # can be acquired:
