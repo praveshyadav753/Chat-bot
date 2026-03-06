@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>{% block title %}Chatbot{% endblock %}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+</head>
+
+<body class="bg-gray-100 min-h-screen flex flex-col">
+
+    <!-- Navbar -->
+    <nav class="bg-white shadow-md p-4">
+        <div class="max-w-6xl mx-auto flex justify-between">
+            <a href="/" class="font-bold text-lg text-blue-600">
+                Chatbot
+            </a>
+            <div class="space-x-4">
+                <a href="/login" class="text-gray-600 hover:text-blue-500">Login</a>
+                <a href="/register" class="text-gray-600 hover:text-blue-500">Register</a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Page Content -->
+    <main class="w-full flex-1 flex items-center justify-center p-6">
+        {% block content %}{% endblock %}
+    </main>
+
+</body>
+</html>
