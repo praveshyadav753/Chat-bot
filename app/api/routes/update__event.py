@@ -20,6 +20,7 @@ async def event_stream():
         async for message in pubsub.listen():
 
             if message["type"] == "message":
+                print(message)
 
                 yield {
                     "event": "update",

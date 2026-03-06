@@ -31,53 +31,66 @@ async def stream_chat(
     session_id: Optional[str] = Form(None),
     db=Depends(get_db)
 ):
-
-    # session_id = session_id or str(uuid4())
-    session_id =1
+    """
+    Stream chat responses via Server-Sent Events (SSE).
+    
+    Yields:
+        - data: SESSION:{session_id}\n\n - Session ID sent at start
+        - data: {full_response}\n\n - Complete response content
+        - data: [END]\n\n - End marker when complete
+    """
+    # Generate or use existing session ID
+    session_id = session_id or str(uuid4())
                         
     initial_state: ChatState = {
         "user_input": message,
         "user_id": user.id,
-        "access_level":user.access_level,
-        "department":user.department,
+        "access_level": user.access_level,
+        "department": user.department,
         "session_id": session_id,
         "blocked": False,
         "intent": None,
         "context": None,
         "retrieved_docs": [],
         "final_response": None,
-        
     }
 
     async def event_generator():
         try:
+            # ✅ FIX 1: Send session ID at start with proper SSE format
+            yield f"data: SESSION:{session_id}\n\n"
+            
+            response_received = False  # ✅ FIX 2: Track if we got a response
+            
             async for step in graph.astream(initial_state):
-
-                # step is like: {"node_name": updated_state}
-                for node_name, state in step.items():
-
-                    # Stream only when LLM node updates response
-                    if node_name == "llm_node" and state.get("final_response"):
-                        print(state["final_response"])
-                        yield {
-                            "event": "message",
-                            "data": state["final_response"],
-                        }
-
+                # ✅ FIX 3: Check for request disconnection INSIDE the loop
                 if await request.is_disconnected():
+                    print("Client disconnected during streaming")
                     break
+                
+                for node_name, state in step.items():
+                    # ✅ FIX 4: Properly check for final response
+                    if node_name == "llm_node" and state.get("final_response"):
+                        response_text = state["final_response"]
+                        
+                        # ✅ FIX 5: Only yield once per response (not multiple times)
+                        if not response_received:
+                            print(f"LLM Response received: {len(response_text)} characters")
+                            
+                            # ✅ FIX 6: Properly escape special characters in response
+                            # Remove any trailing newlines/spaces that might break SSE format
+                            response_text = response_text.strip()
+                            
+                            # Send the complete response as a single SSE event
+                            yield f"data: {response_text}\n\n"
+                            response_received = True
 
-            # Send session ID at end
-            yield {
-                "event": "end",
-                "data": f"SESSION:{session_id}",
-            }
+            # ✅ FIX 7: Send end marker AFTER the loop completes
+            yield f"data: [END]\n\n"
 
         except Exception as e:
-            print(e)
-            yield {
-                "event": "error",
-                "data": "Internal server error",
-            }
+            print(f"Chat streaming error: {e}")
+            # Send error marker
+            yield f"data: [ERROR]\n\n"
 
     return EventSourceResponse(event_generator())

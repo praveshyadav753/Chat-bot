@@ -6,7 +6,7 @@ from langchain_core.messages import HumanMessage, AIMessage
 
 
 async def load_state_node(state: ChatState) -> ChatState:
-    MAX_HISTORY = 10
+    MAX_HISTORY = int(10)
     session_id = state["session_id"]
 
     async with AsyncSessionLocal() as db:
