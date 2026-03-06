@@ -12,7 +12,7 @@ def reject_node(state: ChatState) -> ChatState:
     severity = state.get("severity", "medium")
 
     # Safe user-facing message
-    state["response"] = (
+    state["final_response"] = (
         "I'm unable to process this request due to policy restrictions."
     )
 

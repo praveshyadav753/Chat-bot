@@ -32,7 +32,8 @@ async def stream_chat(
     db=Depends(get_db)
 ):
 
-    session_id = session_id or str(uuid4())
+    # session_id = session_id or str(uuid4())
+    session_id =1
                         
     initial_state: ChatState = {
         "user_input": message,
