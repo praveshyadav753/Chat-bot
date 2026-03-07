@@ -10,7 +10,7 @@ async def llm_node(state: ChatState) -> ChatState:
         query = state.get("user_input")
         context = state.get("context")
         history = state.get("messages", [])
-        summary = state.get("summary",[])
+        summary = state.get("summary","")
 
         if not query:
             return {"final_response": "Invalid request.", "status": "ERROR"}
@@ -39,7 +39,7 @@ async def llm_node(state: ChatState) -> ChatState:
         response = await llm.ainvoke(messages)
 
         return {
-            "messages": [AIMessage(content=response.content)],  # reducer will append
+            "messages": [HumanMessage(content=query),AIMessage(content=response.content)],  # reducer will append
             "final_response": response.content,
             "status": "GENERATED",
         }

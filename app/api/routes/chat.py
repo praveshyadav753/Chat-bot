@@ -43,7 +43,7 @@ async def stream_chat(
         - data: [END]\n\n - End marker
     """
     # Generate or use existing session ID
-    session_id = session_id or str(uuid4())
+    session_id = session_id or str("abc")
                         
     initial_state: ChatState = {
         "user_input": message,
