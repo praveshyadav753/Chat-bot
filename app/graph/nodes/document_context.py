@@ -9,18 +9,19 @@ async def get_document_status_flags(session_id: str, user_id: int):
     print("document_context_node....")
     async with AsyncSessionLocal() as db:
         result = await db.execute(
-            select(Document).where(
+            select(Document.id, Document.status).where(
                 Document.session_id == session_id,
                 Document.uploaded_by == user_id,
             )
         )
+        docs = result.all()
 
-        docs = result.scalars().all()
+    ready_docs = [doc_id for doc_id, status in docs if status == "READY"]
 
     return {
         "has_document": len(docs) > 0,
-        "document_ready": any(doc.status == "READY" for doc in docs),
-        "document_id": (doc.document_id  for doc in docs if doc.status =="READY"),
+        "document_ready": len(ready_docs) >0,
+        "document_ids": ready_docs,
     }
 
 async def document_context_node(state: ChatState) -> ChatState:
@@ -34,5 +35,5 @@ async def document_context_node(state: ChatState) -> ChatState:
         **state,
         "has_document": flags["has_document"],
         "document_ready": flags["document_ready"],
-        "document_id" :flags["document_id"]
+        "document_id" :flags["document_ids"]
     }

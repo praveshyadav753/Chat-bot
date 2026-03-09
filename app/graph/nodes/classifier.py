@@ -1,10 +1,11 @@
 from enum import Enum
+
+from sqlalchemy import select
+
 from app.graph.chatstate import ChatState
 from app.graph.model import LLMFactory
-
 # from app.models.connection import AsyncSessionLocal
 from app.models.document import Document
-from sqlalchemy import select
 
 
 class Intent(str, Enum):

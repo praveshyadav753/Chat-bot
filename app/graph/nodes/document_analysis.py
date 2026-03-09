@@ -1,6 +1,6 @@
 from app.graph.chatstate import ChatState
-from app.graph.model import LLMFactory
-
+from app.REG.query.query_db import get_document_chunks
+from app.REG.Schema import RetrievalUser
 
 
 
@@ -9,27 +9,69 @@ from app.graph.model import LLMFactory
 
 async def document_analysis_node(state: ChatState) -> ChatState:
 
-    full_doc = state["document_text"]
+        has_document = state.get("has_document", False)
+        document_ready = state.get("document_ready", False)
+        document_id = state.get("document_id")
+        user_request = state.get("user_input", "")
 
-    llm = LLMFactory.create_llm(
-        provider="gemini",
-        model="gemini-2.5-flash-lite",
-        temperature=0,
-    )
+        if not has_document:
+            return {
+                **state,
+                "final_response": "No document is available to summarize.",
+            }
 
-    prompt = f"""
-You are analyzing a document.
+        if not document_ready:
+            return {
+                **state,
+                "final_response": "Your document is still being processed. Please wait until processing is complete.",
+            }
 
-Document:
-{full_doc}
+        if not document_id:
+            return {
+                **state,
+                "error": "Missing document ID for summary.",
+            }
 
-User question:
-{state['user_input']}
-"""
+        user = RetrievalUser(
+            user_id=state["user_id"],
+            access_level=state.get("access_level", 1),
+            department=state.get("department", "general"),
+            role=state.get("role", "user"),
+        )
 
-    response = await llm.ainvoke(prompt)
+        try:
+            chunks = await get_document_chunks(
+                document_id=document_id,
+                user=user
+            )
+        except Exception as e:
+            return {
+                **state,
+                "error": "Failed to retrieve document.",
+                "debug_error": str(e)
+            }
 
-    return {
-        **state,
-        "response": response.content
-    }
+        if not chunks:
+            return {
+                **state,
+                "error": "Document not found or access denied.",
+            }
+
+        chunks = sorted(chunks, key=lambda x: x.get("page_number", 0))
+
+        full_text = "\n\n".join(chunk["content"] for chunk in chunks)
+
+        prompt = f"""
+        You are analyzing a document.
+
+        Document:
+        {full_text}
+
+        User question:
+        {user_request}
+        """
+        return {
+            **state,
+            "user_input": prompt,
+            
+        }

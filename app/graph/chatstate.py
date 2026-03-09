@@ -28,6 +28,7 @@ class ChatState(TypedDict):
     requires_retrieval: bool
    
     document_id: Optional[List[str]]
+    active_document_id :str
     retrieved_docs: Optional[List[Dict[str, Any]]]
     has_document : bool
     document_ready:bool
@@ -52,3 +53,4 @@ class ChatState(TypedDict):
     cache_hit: bool
     status: str  # STARTED | CLASSIFIED | RETRIEVED | RERANKED | GENERATED | VALIDATED | TOOL_RUNNING | WAITING_APPROVAL | COMPLETED | ERROR
     error: Optional[str]
+    debug_error :Optional[str]

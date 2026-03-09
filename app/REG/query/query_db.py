@@ -70,14 +70,14 @@ async def Retrievel_pipeline(request: RetrievalQuery, user: RetrievalUser):
 
 
 
-async def get_document_chunks(document_id: str, user:RetrievalUser):
+async def get_document_chunks(document_id: list[str], user:RetrievalUser):
 
     store = get_vectorstore()
 
     results = store._collection.get(
         where={
             "$and": [
-                {"document_id": document_id},
+                {"document_id": {"$in": document_id}},
                 {"uploaded_by": user.user_id},
                 {"access_level": {"$lte": user.access_level}},
                 {"department": user.department},

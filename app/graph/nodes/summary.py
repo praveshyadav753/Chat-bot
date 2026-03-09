@@ -8,9 +8,8 @@ async def summary_node(state: ChatState) -> ChatState:
 
     summary_type = state.get("summary_type", "document")
 
-    # =========================
     # DOCUMENT SUMMARY MODE
-    # =========================
+   
     if summary_type == "document":
 
         has_document = state.get("has_document", False)
@@ -40,7 +39,7 @@ async def summary_node(state: ChatState) -> ChatState:
             user_id=state["user_id"],
             access_level=state.get("access_level", 1),
             department=state.get("department", "general"),
-            role=state.get("role", "user"),
+            role=state.get("role", "moderate"),
         )
 
         try:
@@ -49,6 +48,7 @@ async def summary_node(state: ChatState) -> ChatState:
                 user=user
             )
         except Exception as e:
+            print(e)
             return {
                 **state,
                 "error": "Failed to retrieve document.",

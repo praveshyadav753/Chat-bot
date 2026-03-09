@@ -37,6 +37,7 @@ async def llm_node(state: ChatState) -> ChatState:
         messages.append(HumanMessage(content=query))
 
         response = await llm.ainvoke(messages)
+        print(state.get("error"))
 
         return {
             "messages": [HumanMessage(content=query),AIMessage(content=response.content)],  # reducer will append
