@@ -1,3 +1,5 @@
+import os
+
 from celery.utils.log import get_task_logger
 from app.models.connection import sync_session_maker
 from app.REG.store.parsedoc import process_document
@@ -67,12 +69,15 @@ def store_rag_doc(
             department,
         )
 
+        
         if not docs:
             doc.status = "FAILED"
             db.commit()
-
+            try:
+                os.remove(file_path)
+            except:
+                pass
             publish_status(document_id, "FAILED", session_id)
-
             return False
 
         # 🔹 Store embeddings

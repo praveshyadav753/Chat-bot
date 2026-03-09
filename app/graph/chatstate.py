@@ -7,6 +7,7 @@ from langgraph.graph import add_messages
 class ChatState(TypedDict):
     
     messages: Annotated[list, add_messages]
+    message_count :int
     summary: Optional[str]
     summary_type: Optional[str]   # document | conversation
 
@@ -20,6 +21,7 @@ class ChatState(TypedDict):
   
     user_id: str
     session_id: str
+    role:str
     access_level:int
     department : str
 

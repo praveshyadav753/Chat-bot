@@ -32,7 +32,7 @@ builder.add_node("llm_node", llm_node)
 builder.add_node("reject", reject_node)
 builder.add_node("persist_data",persist_message_node)
 
-# Entry edge
+
 builder.add_edge(START, "load_state")
 
 # Load memory → guardrail
@@ -74,7 +74,7 @@ builder.add_conditional_edges(
 
 builder.add_edge("rag_node", "llm_node")
 builder.add_edge("summary_node", "llm_node")
-builder.add_edge("document_analysis_node",END)
+builder.add_edge("document_analysis_node","llm_node")
 builder.add_edge("llm_node","persist_data")
 builder.add_edge("persist_data", END)
 builder.add_edge("reject", END)

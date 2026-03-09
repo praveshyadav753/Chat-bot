@@ -1,5 +1,5 @@
 from typing import List
-from fastapi import APIRouter, UploadFile, File, Depends
+from fastapi import APIRouter, HTTPException, UploadFile, File, Depends
 from uuid import uuid4
 import os
 import aiofiles
@@ -31,9 +31,7 @@ async def upload_document(
         file_id = str(uuid4())
         file_path = os.path.join(UPLOAD_DIR, f"{file_id}_{file.filename}")
 
-        async with aiofiles.open(file_path, "wb") as f:
-            while chunk := await file.read(1024 * 1024):
-                await f.write(chunk)
+        
 
         new_doc = Document(
             id=file_id,
@@ -45,6 +43,15 @@ async def upload_document(
             status="PROCESSING",
             session_id=session_id,
         )
+        try:
+            async with aiofiles.open(file_path, "wb") as f:
+                while chunk := await file.read(1024 * 1024):
+                    await f.write(chunk)
+        except Exception as e:
+            # Delete the database entry
+            await db.delete(new_doc)
+            await db.commit()
+            raise HTTPException(status_code=500, detail="File upload failed")
 
         db.add(new_doc)
         await db.commit()

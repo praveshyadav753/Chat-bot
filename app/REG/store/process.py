@@ -6,12 +6,12 @@ from app.celery_app import celery_app
 @celery_app.task
 def store_rag_doc(file_path: str,document_id: str, user_id: int, session_id: str,access_level:int,department:str):   
     async def run():
-        docs = await process_document(file_path,document_id ,user_id, access_level,department)
+        docs =  process_document(file_path,document_id ,user_id, access_level,department)
 
         if not docs:
             return False
 
-        await store_documents(docs)
+        store_documents(docs)
         print("stored")
         return True
 
