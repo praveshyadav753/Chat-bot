@@ -20,6 +20,7 @@ async def get_document_status_flags(session_id: str, user_id: int):
     return {
         "has_document": len(docs) > 0,
         "document_ready": any(doc.status == "READY" for doc in docs),
+        "document_id": (doc.document_id  for doc in docs if doc.status =="READY"),
     }
 
 async def document_context_node(state: ChatState) -> ChatState:
@@ -33,4 +34,5 @@ async def document_context_node(state: ChatState) -> ChatState:
         **state,
         "has_document": flags["has_document"],
         "document_ready": flags["document_ready"],
+        "document_id" :flags["document_id"]
     }

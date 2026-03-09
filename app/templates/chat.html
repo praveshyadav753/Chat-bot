@@ -39,15 +39,15 @@
   .chat-container {
     width: 100%;
     max-width: 900px;
-    margin: 2rem auto;
+    margin: 1rem auto;
     padding: 0 1rem;
     display: flex;
     flex-direction: column;
-    height: calc(100vh - 4rem);
+    height: 100%;
   }
 
   .chat-header {
-    margin-bottom: 1rem;
+    margin-bottom: 0.5rem;
     text-align: center;
   }
 
@@ -519,6 +519,7 @@
             class="file-upload-btn"
             title="Upload documents"
           >
+
             📎
           </button>
 
@@ -577,12 +578,14 @@
     `;
     documentList.appendChild(card);
     emptyState.style.display = "none";
+    sendBtn.disabled = true
   }
 
   // Mark document as ready
   function markReady(id) {
     const card = document.getElementById("doc-" + id);
     if (!card) return;
+    sendBtn.disabled = false
     card.innerHTML = `
       <div class="document-icon">
         <span class="status-ready">✓</span>
@@ -601,6 +604,7 @@
       </div>
       <div class="document-name">Processing Failed</div>
     `;
+     sendBtn.disabled = false
   }
 
   // File selection and upload
@@ -667,7 +671,7 @@
   };
 
   /**
-   * ✅ OPTIMIZED: Send message with streaming SSE response
+   *   Send message with streaming SSE response
    * Handles JSON-encoded responses to preserve formatting
    */
   async function sendMessage(e) {
@@ -804,7 +808,6 @@
             break;
           }
 
-          // ✅ TRY: Parse as JSON (optimized format with newlines preserved)
           try {
             const jsonData = JSON.parse(rawData);
             if (jsonData.content) {
@@ -812,12 +815,10 @@
               console.log("✓ Parsed JSON content");
             }
           } catch (e) {
-            // ✅ FALLBACK: If not JSON, treat as plain text
             fullMessage += rawData + " ";
           }
         }
 
-        // ✅ Update message bubble with markdown rendering
         if (fullMessage.trim()) {
           bubbleEl.innerHTML = renderMarkdown(fullMessage.trim());
           chatBox.scrollTop = chatBox.scrollHeight;

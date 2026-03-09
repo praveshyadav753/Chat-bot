@@ -8,9 +8,8 @@ class ChatState(TypedDict):
     
     messages: Annotated[list, add_messages]
     summary: Optional[str]
-
-
     summary_type: Optional[str]   # document | conversation
+
     conversation_messages: Optional[list]
     session_summary: Optional[str]
     need_conversation_summary: bool
@@ -27,10 +26,8 @@ class ChatState(TypedDict):
   
     intent: Optional[str]  # RAG | TOOL | DIRECT_LLM
     requires_retrieval: bool
-
-
    
-    document_id: str
+    document_id: Optional[List[str]]
     retrieved_docs: Optional[List[Dict[str, Any]]]
     has_document : bool
     document_ready:bool

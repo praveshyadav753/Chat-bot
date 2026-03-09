@@ -56,7 +56,7 @@ def store_rag_doc(
         doc.status = "PROCESSING"
         db.commit()
 
-        publish_status(document_id, "PROCESSING", session_id="1")
+        publish_status(document_id, "PROCESSING", session_id=session_id)
 
         # 🔹 Parse document
         docs = process_document(
