@@ -1,3 +1,4 @@
+import os
 import re
 import uuid
 from datetime import datetime
@@ -90,7 +91,7 @@ def process_document(
             Document(
                 page_content=page_text,
                 metadata={
-                    "source": file_path,
+                    "source": os.path.basename(file_path),  # Clean filename only
                     "document_id": document_id,
                     "page_number": page_num,
                     "uploaded_by": user_id,

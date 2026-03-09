@@ -37,9 +37,11 @@ async def rag_node(state: ChatState) -> ChatState :
         return state
 
     if not results:
-        state["no_context"] = True
-        state["retrieved_docs"] = []
-        return state
+        return {
+            **state,
+            "final_response": "I couldn't find relevant information in your documents. Please try a different question or upload more documents.",
+            "status": "NO_CONTEXT"
+        }
     
     state["retrieved_docs"] = results
 

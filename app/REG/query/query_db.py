@@ -1,6 +1,7 @@
 # from typing import Annotated
 # from app.REG.Schema import RetrievalQuery
 import asyncio
+from typing import Union
 
 from app.REG.query.utility import get_reranker,retrieve_context
 from app.REG.Schema import RetrievalQuery,RetrievalUser
@@ -70,9 +71,11 @@ async def Retrievel_pipeline(request: RetrievalQuery, user: RetrievalUser):
 
 
 
-async def get_document_chunks(document_id: list[str], user:RetrievalUser):
+async def get_document_chunks(document_id: Union[str, list[str]], user:RetrievalUser):
 
     store = get_vectorstore()
+    if isinstance(document_id, str):
+        document_id = [document_id]
 
     results = store._collection.get(
         where={
@@ -100,6 +103,6 @@ async def get_document_chunks(document_id: list[str], user:RetrievalUser):
     ]
 
 # if __name__ == "__main__":
-#     user = RetrievalUser(user_id=2,access_level=1,department="general",role="moderate")
+#     user = RetrievalUser(user_id=2,access_level=1,department="general",role="moderator")
 #     result= asyncio.run( get_document_chunks("2efca688-634b-43da-bf7d-ab714d8adbf3",user))
 #     print(result)

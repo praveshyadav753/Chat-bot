@@ -6,6 +6,9 @@ from app.models.chat import ChatSession
 from sqlalchemy.future import select
 from datetime import datetime
 from langchain_core.messages import HumanMessage, AIMessage
+import logging
+logger = logging.getLogger(__name__)
+
 
 async def persist_message_node(state: ChatState) -> ChatState:
 
@@ -14,51 +17,58 @@ async def persist_message_node(state: ChatState) -> ChatState:
     query = state.get("user_input")
     final_response = state.get("final_response")
     summary = state.get("summary", "")
+    messages = state.get("messages", [])  
+    message_count = state.get("message_count", 0)
 
     if not user_id or not session_id:
+        logger.warning("Missing user_id or session_id, skipping persistence")
         return state
+    try:
+        async with AsyncSessionLocal() as session:
+            async with session.begin():
 
-    async with AsyncSessionLocal() as session:
-        async with session.begin():
-
-            # 1️⃣ Ensure chat session exists FIRST
-            result = await session.execute(
-                select(ChatSession).where(ChatSession.id == session_id)
-            )
-
-            chat_session = result.scalars().first()
-
-            if not chat_session:
-                chat_session = ChatSession(
-                    id=session_id,
-                    user_id=user_id,
-                    summary=summary
+                result = await session.execute(
+                    select(ChatSession).where(ChatSession.id == session_id)
                 )
-                session.add(chat_session)
 
-            else:
-                chat_session.summary = summary
-                chat_session.updated_at = datetime.utcnow()
+                chat_session = result.scalars().first()
 
-            # 2️⃣ Now insert messages
-            if query:
-                session.add(
-                    Message(
-                        session_id=session_id,
-                        role="user",
-                        content=query,
-                        created_at=datetime.utcnow(),
+                if not chat_session:
+                    chat_session = ChatSession(
+                        id=session_id,
+                        user_id=user_id,
+                        summary=summary
                     )
-                )
+                    session.add(chat_session)
 
-            if final_response:
-                session.add(
-                    Message(
-                        session_id=session_id,
-                        role="assistant",
-                        content=final_response,
-                        created_at=datetime.utcnow(),
+                else:
+                        print(f"  → Updating session summary ({len(summary)} chars)")
+                        chat_session.summary = summary
+                        chat_session.updated_at = datetime.utcnow()
+
+                
+                if query:
+                    session.add(
+                        Message(
+                            session_id=session_id,
+                            role="user",
+                            content=query,
+                            created_at=datetime.utcnow(),
+                        )
                     )
-                )
+                    
+
+                if final_response:
+                    session.add(
+                        Message(
+                            session_id=session_id,
+                            role="assistant",
+                            content=final_response,
+                            created_at=datetime.utcnow(),
+                        )
+                    )
+            await session.commit()
+    except Exception as e:
+        logger.error(f"Error persisting messages: {str(e)}")            
 
     return state

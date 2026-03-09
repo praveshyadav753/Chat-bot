@@ -2,13 +2,8 @@ from app.graph.chatstate import ChatState
 from app.REG.query.query_db import get_document_chunks
 from app.REG.Schema import RetrievalUser
 
-
-
-
-
-
 async def document_analysis_node(state: ChatState) -> ChatState:
-
+        print("document analysis node...........")
         has_document = state.get("has_document", False)
         document_ready = state.get("document_ready", False)
         document_id = state.get("document_id")
@@ -72,6 +67,7 @@ async def document_analysis_node(state: ChatState) -> ChatState:
         """
         return {
             **state,
-            "user_input": prompt,
+            "context" : full_text,
+            "user_input": user_request,
             
         }
