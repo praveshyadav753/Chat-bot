@@ -3,14 +3,11 @@ from app.REG.query.query_db import get_document_chunks
 from app.REG.Schema import RetrievalUser
 
 
-async def summary_node(state: ChatState) -> ChatState:
-    print("summary node.....")
 
-    summary_type = state.get("summary_type", "document")
 
-    # DOCUMENT SUMMARY MODE
-   
-    if summary_type == "document":
+
+
+async def document_analysis_node(state: ChatState) -> ChatState:
 
         has_document = state.get("has_document", False)
         document_ready = state.get("document_ready", False)
@@ -39,7 +36,7 @@ async def summary_node(state: ChatState) -> ChatState:
             user_id=state["user_id"],
             access_level=state.get("access_level", 1),
             department=state.get("department", "general"),
-            role=state.get("role", "moderate"),
+            role=state.get("role", "user"),
         )
 
         try:
@@ -48,7 +45,6 @@ async def summary_node(state: ChatState) -> ChatState:
                 user=user
             )
         except Exception as e:
-            print(e)
             return {
                 **state,
                 "error": "Failed to retrieve document.",
@@ -66,62 +62,16 @@ async def summary_node(state: ChatState) -> ChatState:
         full_text = "\n\n".join(chunk["content"] for chunk in chunks)
 
         prompt = f"""
-You are a professional document summarization assistant.
+        You are analyzing a document.
 
-User Request:
-{user_request}
+        Document:
+        {full_text}
 
-Instructions:
-- Generate a clear and structured summary
-- Highlight key points
-- Preserve important facts and numbers
-- Do NOT hallucinate information
-- If sections exist, summarize section-wise
-
-DOCUMENT CONTENT:
-{full_text}
-"""
-
-        return {
-            **state,
-            "context": full_text,
-            "retrieved_docs": chunks,
-            "user_input": prompt,
-            "summary_mode": True
-        }
-
-    # =========================
-    # CONVERSATION SUMMARY MODE
-    # =========================
-
-    elif summary_type == "conversation":
-
-        messages = state.get("conversation_messages", [])
-
-        if not messages:
-            return state
-
-        history_text = "\n".join(
-            f"{m['role']}: {m['content']}" for m in messages
-        )
-
-        prompt = f"""
-Summarize the following conversation briefly so it can be used as memory for future chats.
-
-Guidelines:
-- Capture user goals
-- Capture key answers
-- Remove small talk
-- Keep summary under 200 words
-
-CONVERSATION:
-{history_text}
-"""
-
+        User question:
+        {user_request}
+        """
         return {
             **state,
             "user_input": prompt,
-            "summary_mode": True
+            
         }
-
-    return state

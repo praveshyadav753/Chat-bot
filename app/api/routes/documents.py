@@ -18,7 +18,8 @@ UPLOAD_DIR = "uploads"
 async def upload_document(
     documents: List[UploadFile] = File(...),
     user=Depends(get_current_active_user),
-    db=Depends(get_db)
+    db=Depends(get_db),
+    session_id : str ="abc"
 ):
 
     os.makedirs(UPLOAD_DIR, exist_ok=True)
@@ -42,6 +43,7 @@ async def upload_document(
             access_level=user.access_level,
             department=user.department,
             status="PROCESSING",
+            session_id=session_id,
         )
 
         db.add(new_doc)
@@ -50,7 +52,7 @@ async def upload_document(
         store_rag_doc.delay(
             file_path=file_path,
             document_id=file_id,
-            session_id="None",
+            session_id=session_id,
             user_id=user.id,
             access_level=user.access_level,
             department=user.department,

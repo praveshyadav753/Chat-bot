@@ -2,10 +2,12 @@ from langgraph.graph import START, END, StateGraph
 from app.graph.chatstate import ChatState
 
 from app.graph.nodes.check_message_length import check_message_length_node
+from app.graph.nodes.document_analysis import document_analysis_node
 from app.graph.nodes.document_context import document_context_node
 from app.graph.nodes.input_guardrails import input_guardrail_node
 from app.graph.nodes.classifier import classifier_node
 from app.graph.nodes.llm import llm_node
+from app.graph.nodes.persist_message import persist_message_node
 from app.graph.nodes.rag import rag_node
 from app.graph.nodes.reject import reject_node
 from app.graph.nodes.summary import summary_node
@@ -25,8 +27,10 @@ builder.add_node("document_context", document_context_node)
 builder.add_node("classify", classifier_node)
 builder.add_node("rag_node", rag_node)
 builder.add_node("summary_node", summary_node)
+builder.add_node("document_analysis_node",document_analysis_node)
 builder.add_node("llm_node", llm_node)
 builder.add_node("reject", reject_node)
+builder.add_node("persist_data",persist_message_node)
 
 # Entry edge
 builder.add_edge(START, "load_state")
@@ -62,13 +66,17 @@ builder.add_conditional_edges(
         "rag_node": "rag_node",
         "llm_node": "llm_node",
         "summary_node": "summary_node",
+        "document_analysis_node":"document_analysis_node",
         "reject": "reject",
+       
     },
 )
 
 builder.add_edge("rag_node", "llm_node")
 builder.add_edge("summary_node", "llm_node")
-builder.add_edge("llm_node", END)
+builder.add_edge("document_analysis_node",END)
+builder.add_edge("llm_node","persist_data")
+builder.add_edge("persist_data", END)
 builder.add_edge("reject", END)
 
 graph = builder.compile()

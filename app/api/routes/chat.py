@@ -42,8 +42,7 @@ async def stream_chat(
         - data: {"content": "..."}\n\n - Response content as JSON (single line)
         - data: [END]\n\n - End marker
     """
-    # Generate or use existing session ID
-    session_id = session_id or str(uuid4())
+    session_id = session_id or str("abc")
                         
     initial_state: ChatState = {
         "user_input": message,
@@ -67,7 +66,6 @@ async def stream_chat(
             response_received = False
             
             async for step in graph.astream(initial_state):
-                # ✅ Check for disconnection first
                 if await request.is_disconnected():
                     print("Client disconnected")
                     break
@@ -76,22 +74,17 @@ async def stream_chat(
                     if node_name == "llm_node" and state.get("final_response"):
                         response_text = state["final_response"]
                         
-                        # ✅ Only yield once
                         if not response_received:
                             print(f"LLM Response: {len(response_text)} characters")
                             
-                            # ✅ CRITICAL FIX: Encode response as JSON to preserve formatting
-                            # This ensures multiline text is sent as a single SSE event
-                            # without breaking the SSE format
+                           
                             response_json = json.dumps({
                                 "content": response_text.strip()
                             })
                             
-                            # ✅ Send as single-line JSON (no internal newlines to break SSE)
                             yield f"data: {response_json}\n\n"
                             response_received = True
 
-            # ✅ Step 2: Send completion marker
             yield f"data: [END]\n\n"
 
         except Exception as e:
