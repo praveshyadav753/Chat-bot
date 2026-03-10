@@ -1,8 +1,10 @@
-from langchain_community.vectorstores import Chroma
-# from chroma import 
+import threading
+
+from langchain_chroma import Chroma  # from chroma import 
 from app.REG.embedding_model import get_embeddings
 
 _vectorstore_instance = None
+_lock = threading.Lock()
 
 
 def get_vectorstore():
@@ -16,6 +18,8 @@ def get_vectorstore():
             collection_name="rag_collection",
             embedding_function=embeddings,
             persist_directory="./chroma_db",
+            collection_metadata={"hnsw:space": "cosine"},
+
         )
 
     return _vectorstore_instance

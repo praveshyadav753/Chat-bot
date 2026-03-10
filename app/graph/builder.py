@@ -10,8 +10,8 @@ from app.graph.nodes.llm import llm_node
 from app.graph.nodes.persist_message import persist_message_node
 from app.graph.nodes.rag import rag_node
 from app.graph.nodes.reject import reject_node
-from app.graph.nodes.summary import summary_node
-
+from app.graph.nodes.summarize_doc import summarize_document_node
+from app.graph.nodes.summarize_conversation import summarize_conversation
 from app.graph.routes import guardrail_router, route_by_intent
 from app.graph.utils import message_router
 from app.graph.nodes.memory_loder import load_state_node
@@ -23,10 +23,11 @@ builder = StateGraph(ChatState)
 builder.add_node("load_state", load_state_node)
 builder.add_node("input_guardrails", input_guardrail_node)
 builder.add_node("check_messages_length", check_message_length_node)
+builder.add_node("summarize_conversation",summarize_conversation)
 builder.add_node("document_context", document_context_node)
 builder.add_node("classify", classifier_node)
 builder.add_node("rag_node", rag_node)
-builder.add_node("summary_node", summary_node)
+builder.add_node("summarize_document_node", summarize_document_node)
 builder.add_node("document_analysis_node",document_analysis_node)
 builder.add_node("llm_node", llm_node)
 builder.add_node("reject", reject_node)
@@ -52,7 +53,7 @@ builder.add_conditional_edges(
     "check_messages_length",
     message_router,
     {
-        "summary_node": "summary_node",
+        "summary_node": "summarize_conversation",
         "intent_classifier": "document_context"
     },
 )
@@ -65,7 +66,7 @@ builder.add_conditional_edges(
     {
         "rag_node": "rag_node",
         "llm_node": "llm_node",
-        "summary_node": "summary_node",
+        "summary_node": "summarize_document_node",
         "document_analysis_node":"document_analysis_node",
         "reject": "reject",
        
@@ -73,7 +74,9 @@ builder.add_conditional_edges(
 )
 
 builder.add_edge("rag_node", "llm_node")
-builder.add_edge("summary_node", "llm_node")
+builder.add_edge("summarize_conversation", "document_context")
+
+builder.add_edge("summarize_document_node", "llm_node")
 builder.add_edge("document_analysis_node","llm_node")
 builder.add_edge("llm_node","persist_data")
 builder.add_edge("persist_data", END)

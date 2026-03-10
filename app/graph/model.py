@@ -28,6 +28,7 @@ class LLMFactory:
         model: str | None = None,
         temperature: float = 0.3,
         max_tokens: int | None = None,
+        streaming:bool =False
     ):
         """
         Create LLM dynamically.
@@ -41,6 +42,7 @@ class LLMFactory:
                 model=model,
                 temperature=temperature,
                 max_tokens=max_tokens,
+                streaming=streaming,
             )
 
         elif provider == "groq":
@@ -49,6 +51,7 @@ class LLMFactory:
                 model=model,
                 temperature=temperature,
                 max_tokens=max_tokens,
+                streaming=streaming,
             )
 
         elif provider == "gemini":
@@ -57,6 +60,8 @@ class LLMFactory:
                 model=model,
                 temperature=temperature,
                 max_output_tokens=max_tokens,
+                streaming=streaming,
+                
             
             )
 

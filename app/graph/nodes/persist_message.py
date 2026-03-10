@@ -4,7 +4,7 @@ from app.models.messages import Message
 from app.models.chat import ChatSession
 
 from sqlalchemy.future import select
-from datetime import datetime
+from datetime import datetime, timezone
 from langchain_core.messages import HumanMessage, AIMessage
 import logging
 logger = logging.getLogger(__name__)
@@ -16,7 +16,7 @@ async def persist_message_node(state: ChatState) -> ChatState:
     session_id = state.get("session_id")
     query = state.get("user_input")
     final_response = state.get("final_response")
-    summary = state.get("summary", "")
+    summary = state.get("summary") or ""
     messages = state.get("messages", [])  
     message_count = state.get("message_count", 0)
 
@@ -44,7 +44,7 @@ async def persist_message_node(state: ChatState) -> ChatState:
                 else:
                         print(f"  → Updating session summary ({len(summary)} chars)")
                         chat_session.summary = summary
-                        chat_session.updated_at = datetime.utcnow()
+                        chat_session.updated_at = datetime.now(timezone.utc)
 
                 
                 if query:
@@ -53,7 +53,7 @@ async def persist_message_node(state: ChatState) -> ChatState:
                             session_id=session_id,
                             role="user",
                             content=query,
-                            created_at=datetime.utcnow(),
+                            created_at=datetime.now(timezone.utc),
                         )
                     )
                     
@@ -64,7 +64,7 @@ async def persist_message_node(state: ChatState) -> ChatState:
                             session_id=session_id,
                             role="assistant",
                             content=final_response,
-                            created_at=datetime.utcnow(),
+                            created_at=datetime.now(timezone.utc),
                         )
                     )
             await session.commit()

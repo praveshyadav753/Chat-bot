@@ -30,7 +30,8 @@ class ChatState(TypedDict):
     requires_retrieval: bool
    
     document_id: Optional[List[str]]
-    active_document_id :str
+    session_documents : Optional[List[dict]]
+    active_documents :Optional[list[dict]]
     retrieved_docs: Optional[List[Dict[str, Any]]]
     has_document : bool
     document_ready:bool

@@ -7,6 +7,7 @@ async def document_analysis_node(state: ChatState) -> ChatState:
         has_document = state.get("has_document", False)
         document_ready = state.get("document_ready", False)
         document_id = state.get("document_id")
+        # active_doc_id = state.get("docu")
         user_request = state.get("user_input", "")
 
         if not has_document:

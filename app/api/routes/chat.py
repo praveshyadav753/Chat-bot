@@ -30,6 +30,7 @@ async def stream_chat(
     user=Depends(get_current_active_user),
     message: str = Form(...),
     session_id: Optional[str] = Form(None),
+    active_documents: Optional[str] =Form(None),
     db=Depends(get_db)
 ):
     """
@@ -43,6 +44,14 @@ async def stream_chat(
         - data: [END]\n\n - End marker
     """
     session_id = session_id or str("abc")
+    parsed_active_documents = []
+    if active_documents:
+        try:
+            parsed_active_documents = json.loads(active_documents)
+        except (json.JSONDecodeError, TypeError):
+            parsed_active_documents = []
+    print(f"recenty uploaded docs:{parsed_active_documents}")
+    print("-----------------------------------------")
                         
     initial_state: ChatState = {
         "user_input": message,
@@ -56,42 +65,34 @@ async def stream_chat(
         "context": None,
         "retrieved_docs": [],
         "final_response": None,
+        "active_documents": parsed_active_documents,
     }
 
     async def event_generator():
         try:
-            # ✅ Step 1: Send session ID as control message
-            # This is NOT displayed - frontend filters it out
             yield f"data: SESSION:{session_id}\n\n"
-            
-            response_received = False
-            
-            async for step in graph.astream(initial_state):
+
+            async for msg, metadata in graph.astream(        
+                initial_state,
+                stream_mode="messages",
+            ):
                 if await request.is_disconnected():
                     print("Client disconnected")
                     break
-                
-                for node_name, state in step.items():
-                    if node_name == "llm_node" and state.get("final_response"):
-                        response_text = state["final_response"]
-                        
-                        if not response_received:
-                            print(f"LLM Response: {len(response_text)} characters")
-                            
-                           
-                            response_json = json.dumps({
-                                "content": response_text.strip()
-                            })
-                            
-                            yield f"data: {response_json}\n\n"
-                            response_received = True
 
-            yield f"data: [END]\n\n"
+                if (
+                    msg.content
+                    and metadata.get("langgraph_node") == "llm_node"
+                ):
+                    chunk_data = json.dumps({"content": msg.content})
+                    yield f"data: {chunk_data}\n\n"
+
+            yield "data: [END]\n\n"
 
         except Exception as e:
             print(f"Chat streaming error: {e}")
             import traceback
             traceback.print_exc()
-            yield f"data: [ERROR]\n\n"
+            yield "data: [ERROR]\n\n"
 
     return EventSourceResponse(event_generator())
