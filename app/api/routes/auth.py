@@ -24,6 +24,8 @@ from .service import register_user_service
 auth_route = APIRouter(prefix="/auth", tags=["Authentication"])
 
 templates = Jinja2Templates(directory="templates")
+templates.env.auto_reload = True
+templates.env.cache = {}
 
 
 @auth_route.post("/register")
@@ -107,6 +109,8 @@ async def login_web(
             secure=True,
             samesite="lax",
         )
+        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+
 
         return response
 
