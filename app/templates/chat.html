@@ -519,7 +519,6 @@
             class="file-upload-btn"
             title="Upload documents"
           >
-
             📎
           </button>
 
@@ -550,6 +549,7 @@
 </div>
 
 <script>
+  let active_documents = [];
   const fileInput = document.getElementById("documents");
   const documentList = document.getElementById("document-list");
   const chatBox = document.getElementById("chat-box");
@@ -578,14 +578,14 @@
     `;
     documentList.appendChild(card);
     emptyState.style.display = "none";
-    sendBtn.disabled = true
+    sendBtn.disabled = true;
   }
 
   // Mark document as ready
   function markReady(id) {
     const card = document.getElementById("doc-" + id);
     if (!card) return;
-    sendBtn.disabled = false
+    sendBtn.disabled = false;
     card.innerHTML = `
       <div class="document-icon">
         <span class="status-ready">✓</span>
@@ -604,7 +604,7 @@
       </div>
       <div class="document-name">Processing Failed</div>
     `;
-     sendBtn.disabled = false
+    sendBtn.disabled = false;
   }
 
   // File selection and upload
@@ -612,9 +612,12 @@
     const files = fileInput.files;
     if (!files.length) return;
 
+    // 🔹 reset previous documents
+    active_documents = [];
+    documentList.innerHTML = "";
+
     const formData = new FormData();
 
-    // Create temporary loader cards
     for (let file of files) {
       const tempId = crypto.randomUUID();
       createDocumentCard(file.name, tempId);
@@ -632,30 +635,41 @@
 
       const data = await res.json();
 
-      // Update cards with actual document IDs
       for (let doc of data.documents) {
+        const cards = document.querySelectorAll('[id^="doc-"]');
+
+        data.documents.forEach((doc, index) => {
+          const card = cards[index];
+          if (card) {
+            card.id = "doc-" + doc.document_id;
+            active_documents.push(doc);
+          }
+        });
         const tempCard = document.querySelector('[id^="doc-"]');
-        if (tempCard) {
-          tempCard.id = "doc-" + doc.document_id;
-        }
+
+        // if (tempCard) {
+        //   tempCard.id = "doc-" + doc.document_id;
+
+        //   // mark as active
+        //   active_documents.push(doc);
+        //   console.log(doc);
+        // }
       }
     } catch (error) {
       console.error("Upload error:", error);
     }
 
-    // Reset file input
     fileInput.value = "";
   });
-
   // SSE for document status updates
   const evt = new EventSource("/api/document-status-stream");
 
   evt.addEventListener("update", (event) => {
     try {
       const data = JSON.parse(event.data);
-      console.log(data)
+      console.log(data);
       if (data.status === "READY") {
-        console.log(data.document_id)
+        console.log(data.document_id);
         markReady(data.document_id);
       } else if (data.status === "FAILED") {
         markFailed(data.document_id);
@@ -702,6 +716,12 @@
     if (session_id) {
       formData.append("session_id", session_id);
     }
+    if (active_documents.length > 0) {
+      formData.append("active_documents", JSON.stringify(active_documents));
+      for (let [key, value] of formData.entries()) {
+        console.log(key, value);
+      }
+    }
 
     try {
       const response = await fetch("/api/chat/stream", {
@@ -726,10 +746,11 @@
 
       // ✅ Parse SSE stream with optimized handling
       await parseSSEStream(response, bubbleEl);
-
     } catch (error) {
       console.error("Chat error:", error);
-      const bubbleEl = chatBox.querySelector(".message-assistant .message-bubble");
+      const bubbleEl = chatBox.querySelector(
+        ".message-assistant .message-bubble",
+      );
       if (bubbleEl) {
         bubbleEl.innerHTML =
           '<span style="color: var(--danger);">❌ Failed to send message. Please try again.</span>';
@@ -741,10 +762,7 @@
     }
   }
 
-  /**
-   * ✅ OPTIMIZED: Parse SSE stream with JSON support
-   * Extracts content from JSON-encoded responses
-   */
+
   async function parseSSEStream(response, bubbleEl) {
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
@@ -753,119 +771,74 @@
     let fullMessage = "";
     let sessionReceived = false;
 
-    // Read stream chunks
+    const processLine = (rawData) => {
+      if (!rawData) return;
+
+      if (rawData.startsWith("SESSION:")) {
+        if (!sessionReceived) {
+          session_id = rawData.slice(8).trim();
+          console.log("✓ Session ID:", session_id);
+          sessionReceived = true;
+        }
+        return;
+      }
+
+      if (rawData === "[END]" || rawData === "[ERROR]") {
+        if (rawData === "[ERROR]") {
+          bubbleEl.innerHTML =
+            '<span style="color: var(--danger);">⚠️ An error occurred.</span>';
+        }
+        return;
+      }
+
+      
+      try {
+        const jsonData = JSON.parse(rawData);
+        if (jsonData.content) {
+          fullMessage = jsonData.content; 
+        }
+      } catch {
+        fullMessage += rawData + " "; 
+      }
+    };
+
     while (true) {
       const { value, done } = await reader.read();
       if (done) break;
 
-      // Decode and add to buffer
       buffer += decoder.decode(value, { stream: true });
-
-      // ✅ Split by double newlines (SSE event boundary)
       const events = buffer.split("\n\n");
-
-      // Keep incomplete event in buffer
       buffer = events.pop() || "";
 
-      // Process complete events
       for (const event of events) {
         if (!event.trim()) continue;
-
-        // ✅ Parse each line in the event
-        const lines = event.split("\n");
-
-        for (const line of lines) {
-          if (!line.startsWith("data:")) continue;
-
-          // ✅ Extract data after "data: "
-          const rawData = line.slice(5).trim();
-
-          if (!rawData) continue;
-
-          console.log("📨 Raw SSE:", rawData.substring(0, 50) + "...");
-
-          // ✅ Handle SESSION marker (control message - don't display)
-          if (rawData.startsWith("SESSION:")) {
-            if (!sessionReceived) {
-              session_id = rawData.slice(8).trim();
-              console.log("✓ Session ID:", session_id);
-              sessionReceived = true;
-            }
-            continue;  // Skip to next line - don't add to message
-          }
-
-          // ✅ Handle END marker (completion signal)
-          if (rawData === "[END]") {
-            console.log("✓ Stream completed");
-            break;
-          }
-
-          // ✅ Handle ERROR marker
-          if (rawData === "[ERROR]") {
-            console.error("✗ Stream error");
-            bubbleEl.innerHTML =
-              '<span style="color: var(--danger);">⚠️ An error occurred while processing your request.</span>';
-            break;
-          }
-
-          try {
-            const jsonData = JSON.parse(rawData);
-            if (jsonData.content) {
-              fullMessage = jsonData.content;  // Replace with full content
-              console.log("✓ Parsed JSON content");
-            }
-          } catch (e) {
-            fullMessage += rawData + " ";
+        for (const line of event.split("\n")) {
+          if (line.startsWith("data:")) {
+            processLine(line.slice(5).trim());
           }
         }
+      }
 
-        if (fullMessage.trim()) {
-          bubbleEl.innerHTML = renderMarkdown(fullMessage.trim());
-          chatBox.scrollTop = chatBox.scrollHeight;
-        }
+      // ✅ Render after every chunk, not just inside the loop
+      if (fullMessage.trim()) {
+        bubbleEl.innerHTML = renderMarkdown(fullMessage.trim());
+        chatBox.scrollTop = chatBox.scrollHeight;
       }
     }
 
-    // ✅ Process any remaining buffered content
+    // Flush remaining buffer
     if (buffer.trim()) {
-      const remainingLines = buffer.split("\n");
-
-      for (const line of remainingLines) {
-        if (!line.startsWith("data:")) continue;
-
-        const rawData = line.slice(5).trim();
-
-        if (!rawData) continue;
-
-        if (rawData.startsWith("SESSION:")) {
-          if (!sessionReceived) {
-            session_id = rawData.slice(8).trim();
-            sessionReceived = true;
-          }
-          continue;
-        }
-
-        if (rawData === "[END]" || rawData === "[ERROR]") {
-          continue;
-        }
-
-        try {
-          const jsonData = JSON.parse(rawData);
-          if (jsonData.content) {
-            fullMessage = jsonData.content;
-          }
-        } catch (e) {
-          fullMessage += rawData + " ";
+      for (const line of buffer.split("\n")) {
+        if (line.startsWith("data:")) {
+          processLine(line.slice(5).trim());
         }
       }
-
-      // Final render
       if (fullMessage.trim()) {
         bubbleEl.innerHTML = renderMarkdown(fullMessage.trim());
+        chatBox.scrollTop = chatBox.scrollHeight;
       }
     }
   }
-
   /**
    * Escape HTML to prevent XSS
    */

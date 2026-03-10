@@ -89,7 +89,7 @@ async def get_document_chunks(document_id: Union[str, list[str]], user:Retrieval
         }
     )
 
-    print(results)
+    # print(results)
     if not results or not results.get("documents"):
         return []
 
