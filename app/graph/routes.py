@@ -5,7 +5,7 @@ def guardrail_router(state: ChatState):
     if state.get("blocked"):
         return "reject"
 
-    return "classify"
+    return "check_message_length"
 
 
 def route_by_intent(state: ChatState):
@@ -16,13 +16,9 @@ def route_by_intent(state: ChatState):
     
     if intent == "factual":
         return "rag_node"
+    
     if intent =="summary":
         return "summary_node"
-        
-    if intent == "comparison":
-        return "comparison_rag_node"
-
-    
 
     if intent == "tool":
         return "tool_node"

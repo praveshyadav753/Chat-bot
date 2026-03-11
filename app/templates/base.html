@@ -1,31 +1,158 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>{% block title %}Chatbot{% endblock %}</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+
+<title>{% block title %}Chatbot{% endblock %}</title>
+
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+
+  body {
+    background: #0f1117;
+    color: #dde4f0;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+    margin: 0;
+  }
+
+  .navbar {
+    background: #161920;
+    border-bottom: 1px solid #252b3b;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+
+  .nav-inner {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 0 20px;
+    height: 52px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .nav-brand {
+    color: #4f8ef7;
+    font-weight: 700;
+    font-size: 16px;
+    text-decoration: none;
+    letter-spacing: -0.01em;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .nav-brand::before {
+    content: '';
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: #4f8ef7;
+    box-shadow: 0 0 8px #4f8ef7;
+    flex-shrink: 0;
+  }
+
+  .nav-links {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .navlink {
+    color: #8896b0;
+    text-decoration: none;
+    font-size: 13px;
+    font-weight: 500;
+    padding: 5px 12px;
+    border-radius: 7px;
+    transition: color 0.15s, background 0.15s;
+  }
+  .navlink:hover { color: #dde4f0; background: #1d2130; }
+  .navlink.active { color: #4f8ef7; background: #1a2d52; }
+
+  .navlink-btn {
+    color: #fff;
+    text-decoration: none;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 5px 14px;
+    border-radius: 7px;
+    background: #4f8ef7;
+    transition: background 0.15s;
+  }
+  .navlink-btn:hover { background: #3b7ae8; }
+
+  .nav-divider { width: 1px; height: 18px; background: #252b3b; margin: 0 4px; }
+
+  .card { background: #161920; border: 1px solid #252b3b; border-radius: 12px; }
+
+  input[type="text"],
+  input[type="email"],
+  input[type="password"] {
+    background: #0f1117;
+    border: 1px solid #252b3b;
+    color: #dde4f0;
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 14px;
+    outline: none;
+    width: 100%;
+    transition: border-color 0.15s;
+  }
+  input[type="text"]:focus,
+  input[type="email"]:focus,
+  input[type="password"]:focus { border-color: #4f8ef7; }
+  input::placeholder { color: #4a5568; }
+
+  button, .btn { transition: background 0.15s, opacity 0.15s; cursor: pointer; }
+
+  .flash { padding: 10px 14px; border-radius: 8px; font-size: 13px; margin-bottom: 12px; }
+  .flash.error   { background: #2d1a1a; border: 1px solid #7f1d1d; color: #fca5a5; }
+  .flash.success { background: #14281a; border: 1px solid #14532d; color: #86efac; }
+  .flash.info    { background: #0f1f3d; border: 1px solid #1e3a8a; color: #93c5fd; }
+</style>
+
+{% block head %}{% endblock %}
+
 </head>
+<body>
 
-<body class="bg-gray-100 min-h-screen flex flex-col">
+<nav class="navbar">
+  <div class="nav-inner">
 
-    <!-- Navbar -->
-    <nav class="bg-white shadow-md p-4">
-        <div class="max-w-6xl mx-auto flex justify-between">
-            <a href="/" class="font-bold text-lg text-blue-600">
-                Chatbot
-            </a>
-            <div class="space-x-4">
-                <a href="/login" class="text-gray-600 hover:text-blue-500">Login</a>
-                <a href="/register" class="text-gray-600 hover:text-blue-500">Register</a>
-            </div>
-        </div>
-    </nav>
+    <a href="/" class="nav-brand">Chatbot</a>
 
-    <!-- Page Content -->
-    <main class="w-full flex-1 flex items-center justify-center p-6">
-        {% block content %}{% endblock %}
-    </main>
+    <div class="nav-links">
+      {% if is_authenticated %}
+        <a href="/api/chat"
+           class="navlink {% if request.url.path == '/api/chat' %}active{% endif %}">
+          Chat
+        </a>
+        <div class="nav-divider"></div>
+        <a href="/logout" class="navlink">Logout</a>
+      {% else %}
+        <a href="/login"
+           class="navlink {% if request.url.path == '/login' %}active{% endif %}">
+          Login
+        </a>
+        <a href="/register" class="navlink-btn">Register</a>
+      {% endif %}
+    </div>
+
+  </div>
+</nav>
+
+{% block content %}{% endblock %}
+
+{% block scripts %}{% endblock %}
 
 </body>
 </html>

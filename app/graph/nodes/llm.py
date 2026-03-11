@@ -54,8 +54,10 @@ Context:
                 HumanMessage(content=query),
                 AIMessage(content=response),
             ],
+            **state,
             "final_response": response,
             "status": "GENERATED",
+            
         }
 
     except Exception as e:
@@ -65,6 +67,7 @@ Context:
         traceback.print_exc()
 
         return {
+            **state,
             "final_response": "Internal error occurred.",
             "status": "ERROR",
             "error": str(e),

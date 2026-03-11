@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 
 async def persist_message_node(state: ChatState) -> ChatState:
-
+    print("data-persistent node......")
     user_id = state.get("user_id")
     session_id = state.get("session_id")
     query = state.get("user_input")
