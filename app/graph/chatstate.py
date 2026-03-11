@@ -57,3 +57,5 @@ class ChatState(TypedDict):
     status: str  # STARTED | CLASSIFIED | RETRIEVED | RERANKED | GENERATED | VALIDATED | TOOL_RUNNING | WAITING_APPROVAL | COMPLETED | ERROR
     error: Optional[str]
     debug_error :Optional[str]
+
+    langgraph_node : Optional[str]

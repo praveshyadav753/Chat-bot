@@ -45,7 +45,7 @@ builder.add_conditional_edges(
     guardrail_router,
     {
         "reject": "reject",
-        "classify": "check_messages_length",
+        "check_message_length": "check_messages_length",
     },
 )
 
@@ -53,10 +53,11 @@ builder.add_conditional_edges(
     "check_messages_length",
     message_router,
     {
-        "summary_node": "summarize_conversation",
-        "intent_classifier": "document_context"
+        "summarize_conversation": "summarize_conversation",
+        "document_check": "document_context"
     },
 )
+builder.add_edge("summarize_conversation", "document_context")  # ← missing
 
 builder.add_edge("document_context", "classify")
 
@@ -74,7 +75,6 @@ builder.add_conditional_edges(
 )
 
 builder.add_edge("rag_node", "llm_node")
-builder.add_edge("summarize_conversation", "document_context")
 
 builder.add_edge("summarize_document_node", "llm_node")
 builder.add_edge("document_analysis_node","llm_node")

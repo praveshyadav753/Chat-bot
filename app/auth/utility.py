@@ -27,18 +27,15 @@ async def get_token(
     request: Request,
     bearer_token: str | None = Depends(oauth2_scheme),  # Swagger / API clients
 ) -> str:
-    # 1. Try Bearer header first (API clients, Swagger)
     if bearer_token:
         return bearer_token
 
-    # 2. Fall back to HttpOnly cookie (web browser clients)
     cookie_token = request.cookies.get("access_token")
     if cookie_token:
-        # Cookie may be stored as "Bearer <token>" or raw token
         scheme, param = get_authorization_scheme_param(cookie_token)
         if scheme.lower() == "bearer":
             return param
-        return cookie_token  # raw token stored in cookie
+        return cookie_token  
 
     raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
