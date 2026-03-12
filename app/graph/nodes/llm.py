@@ -45,7 +45,7 @@ Context:
 
         response = ""
 
-        async for chunk in llm.astream(messages):
+        async for chunk in llm.astream(messages,config={"tags": ["llm_response"]}):
             if chunk.content:
                 response += chunk.content
 

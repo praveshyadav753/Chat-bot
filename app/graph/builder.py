@@ -15,6 +15,8 @@ from app.graph.nodes.summarize_conversation import summarize_conversation
 from app.graph.routes import guardrail_router, route_by_intent
 from app.graph.utils import message_router
 from app.graph.nodes.memory_loder import load_state_node
+from langgraph.checkpoint.memory import InMemorySaver
+from IPython.display import Image, display
 
 
 builder = StateGraph(ChatState)
@@ -57,7 +59,7 @@ builder.add_conditional_edges(
         "document_check": "document_context"
     },
 )
-builder.add_edge("summarize_conversation", "document_context")  # ← missing
+builder.add_edge("summarize_conversation", "document_context")  
 
 builder.add_edge("document_context", "classify")
 
@@ -82,4 +84,9 @@ builder.add_edge("llm_node","persist_data")
 builder.add_edge("persist_data", END)
 builder.add_edge("reject", END)
 
-graph = builder.compile()
+
+checkpointer = InMemorySaver()
+
+graph = builder.compile(checkpointer=checkpointer)
+
+display(Image(graph.get_graph().draw_mermaid_png()))
