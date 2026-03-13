@@ -1,5 +1,7 @@
 from app.graph.chatstate import ChatState
 from app.security.quadrails import run_input_guardrails
+from langchain_core.messages import HumanMessage
+
 # from app.graph.builder import graph
 
 async def input_guardrail_node(state: ChatState) -> ChatState:
@@ -16,5 +18,6 @@ async def input_guardrail_node(state: ChatState) -> ChatState:
 
     return {
         **state,
-        "blocked": False
+        "blocked": False,
+        "messages": [HumanMessage(content=state["user_input"])]
     }

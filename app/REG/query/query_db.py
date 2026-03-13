@@ -44,7 +44,7 @@ async def Retrievel_pipeline(request: RetrievalQuery, user: RetrievalUser):
             "source": doc.metadata["source"],
             "page_number": doc.metadata["page_number"],
             "document_id": doc.metadata["document_id"],
-            "score": score,
+            "score": float(score),
         }
         for doc, score in valid[: settings.max_context_chunks]
     ]

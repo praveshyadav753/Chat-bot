@@ -1,14 +1,14 @@
 // app/static/js/chat.js
 
-// ── Configure marked ─────────────────────────────────────────────────────────
-marked.setOptions({
-  gfm: true,      // GitHub Flavoured Markdown (tables, strikethrough, etc.)
-  breaks: true,   // single newline = <br> like ChatGPT/Claude
-});
+// ── Configure marked ──────────────────────────────────────────────────────────
+marked.setOptions({ gfm: true, breaks: true });
 
 // ── State ─────────────────────────────────────────────────────────────────────
 let session_id = null;
-let stagedFiles = []; // [{ file, tempId }]
+let isStreaming = false;
+
+// { tempId, file, document_id, status: "uploading"|"processing"|"ready"|"failed" }
+let uploadedFiles = [];
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
 const fileInput    = document.getElementById("documents");
@@ -19,7 +19,28 @@ const sessionLabel = document.getElementById("session-label");
 const stagedDiv    = document.getElementById("staged-files");
 const placeholder  = document.getElementById("chat-placeholder");
 
-// ── Textarea auto-resize ──────────────────────────────────────────────────────
+// ── Send button state ─────────────────────────────────────────────────────────
+function refreshSendBtn() {
+  const pending = uploadedFiles.filter(
+    f => f.status === "uploading" || f.status === "processing"
+  ).length;
+
+  sendBtn.disabled = pending > 0 || isStreaming;
+
+  if (isStreaming) {
+    sendBtn.textContent = "Sending…";
+  } else if (pending > 0) {
+    const uploadingCount  = uploadedFiles.filter(f => f.status === "uploading").length;
+    const processingCount = uploadedFiles.filter(f => f.status === "processing").length;
+    sendBtn.textContent   = uploadingCount > 0
+      ? `Uploading… (${uploadingCount})`
+      : `Processing… (${processingCount})`;
+  } else {
+    sendBtn.textContent = "Send";
+  }
+}
+
+// ── Textarea ──────────────────────────────────────────────────────────────────
 msgInput.addEventListener("input", () => {
   msgInput.style.height = "auto";
   msgInput.style.height = Math.min(msgInput.scrollHeight, 140) + "px";
@@ -28,94 +49,205 @@ msgInput.addEventListener("keydown", e => {
   if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(e); }
 });
 
-// ── File staging ──────────────────────────────────────────────────────────────
+// ── File input → immediate upload ────────────────────────────────────────────
 fileInput.addEventListener("change", () => {
-  for (const file of fileInput.files) {
+  Array.from(fileInput.files).forEach(file => {
     const tempId = crypto.randomUUID();
-    stagedFiles.push({ file, tempId });
-    renderStagedChip(file.name, tempId);
-  }
+    const entry  = { tempId, file, document_id: null, status: "uploading" };
+    uploadedFiles.push(entry);
+    renderChip(entry);
+    uploadFile(entry);
+  });
   fileInput.value = "";
+  refreshSendBtn();
 });
 
-function renderStagedChip(name, tempId) {
+// ── Chip render & state machine ───────────────────────────────────────────────
+function renderChip(entry) {
   const chip = document.createElement("div");
-  chip.className = "staged-chip";
-  chip.id = "chip-" + tempId;
+  chip.className = "staged-chip uploading";
+  chip.id        = "chip-" + entry.tempId;
   chip.innerHTML = `
-    <span class="chip-icon">${fileIcon(name)}</span>
-    <span class="chip-name" title="${escapeHtml(name)}">${escapeHtml(name)}</span>
-    <span class="chip-remove" onclick="removeStagedFile('${tempId}')">✕</span>
+    <span class="chip-icon">${fileIcon(entry.file.name)}</span>
+    <span class="chip-name" title="${escapeHtml(entry.file.name)}">${escapeHtml(entry.file.name)}</span>
+    <span class="chip-badge">uploading</span>
+    <span class="chip-spinner"></span>
+    <span class="chip-remove" onclick="removeChip('${entry.tempId}')">✕</span>
   `;
   stagedDiv.appendChild(chip);
 }
 
-function removeStagedFile(tempId) {
-  stagedFiles = stagedFiles.filter(f => f.tempId !== tempId);
+const CHIP_LABELS = {
+  uploading: "uploading", processing: "processing",
+  ready: "ready ✓", failed: "failed ✕",
+};
+
+function setChipStatus(tempId, status) {
+  const entry = uploadedFiles.find(f => f.tempId === tempId);
+  if (entry) entry.status = status;
+  const chip = document.getElementById("chip-" + tempId);
+  if (!chip) return;
+  chip.classList.remove("uploading", "processing", "ready", "failed");
+  chip.classList.add(status);
+  const badge = chip.querySelector(".chip-badge");
+  if (badge) badge.textContent = CHIP_LABELS[status] || status;
+  const spinner = chip.querySelector(".chip-spinner");
+  if (spinner) spinner.style.display =
+    (status === "ready" || status === "failed") ? "none" : "";
+  refreshSendBtn();
+}
+
+function removeChip(tempId) {
+  const entry = uploadedFiles.find(f => f.tempId === tempId);
+  if (entry && (entry.status === "uploading" || entry.status === "processing")) return;
+  uploadedFiles = uploadedFiles.filter(f => f.tempId !== tempId);
   document.getElementById("chip-" + tempId)?.remove();
+  refreshSendBtn();
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-function escapeHtml(t) {
-  return t.replace(/[&<>"']/g, m =>
-    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" })[m]);
-}
+// ── Upload file immediately on selection ──────────────────────────────────────
+async function uploadFile(entry) {
+  const fd = new FormData();
+  fd.append("documents", entry.file);
+  if (session_id) fd.append("session_id", session_id);
 
-function fileIcon(name) {
-  const ext = name.split(".").pop().toLowerCase();
-  const map = {
-    pdf: "📄", doc: "📝", docx: "📝", txt: "📃", csv: "📊", xlsx: "📊", xls: "📊",
-    png: "🖼", jpg: "🖼", jpeg: "🖼", gif: "🖼", webp: "🖼",
-    mp4: "🎬", mp3: "🎵", zip: "📦", json: "🔧",
-    py: "🐍", js: "⚡", ts: "⚡", html: "🌐", css: "🎨",
-  };
-  return map[ext] || "📎";
-}
-
-function hidePlaceholder() {
-  if (placeholder) placeholder.style.display = "none";
-}
-
-// ── Attach cards ──────────────────────────────────────────────────────────────
-function createAttachCard(name, tempId) {
-  const card = document.createElement("div");
-  card.className = "attach-card uploading";
-  card.id = "ac-" + tempId;
-  card.innerHTML = `
-    <span class="ac-icon">${fileIcon(name)}</span>
-    <div class="ac-info">
-      <span class="ac-name" title="${escapeHtml(name)}">${escapeHtml(name)}</span>
-      <span class="ac-status">uploading…</span>
-    </div>
-  `;
-  return card;
+  try {
+    const res  = await fetch("/api/documents/upload", { method: "POST", body: fd, credentials: "include" });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    const doc  = data.documents?.[0];
+    if (!doc?.document_id) throw new Error("No document_id returned");
+    entry.document_id = doc.document_id;
+    setChipStatus(entry.tempId, "processing");
+  } catch (err) {
+    console.error("[upload] error:", err);
+    setChipStatus(entry.tempId, "failed");
+  }
 }
 
 // ── Document status SSE ───────────────────────────────────────────────────────
 const evtSource = new EventSource("/api/document-status-stream");
 evtSource.addEventListener("update", e => {
   try {
-    const data = JSON.parse(e.data);
-    const card = document.getElementById("ac-" + data.document_id);
-    if (!card) return;
-    if (data.status === "READY") {
-      card.classList.replace("uploading", "ready");
-      card.querySelector(".ac-status").textContent = "ready";
-    } else if (data.status === "FAILED") {
-      card.classList.replace("uploading", "failed");
-      card.querySelector(".ac-status").textContent = "failed";
-    }
-  } catch (err) { console.error("Status parse error:", err); }
+    const { document_id, status } = JSON.parse(e.data);
+    const entry = uploadedFiles.find(f => f.document_id === document_id);
+    if (!entry) return;
+    if (status === "READY")  setChipStatus(entry.tempId, "ready");
+    if (status === "FAILED") setChipStatus(entry.tempId, "failed");
+  } catch (err) { console.error("[SSE doc] parse error:", err); }
 });
-evtSource.onerror = () => console.warn("Document status stream disconnected");
+evtSource.onerror = () => console.warn("[SSE doc] disconnected");
 
-// ── DOM builders ──────────────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function escapeHtml(t) {
+  return t.replace(/[&<>"']/g, m =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" })[m]);
+}
+function fileIcon(name) {
+  const ext = name.split(".").pop().toLowerCase();
+  return ({ pdf:"📄",doc:"📝",docx:"📝",txt:"📃",csv:"📊",xlsx:"📊",xls:"📊",
+    png:"🖼",jpg:"🖼",jpeg:"🖼",gif:"🖼",webp:"🖼",mp4:"🎬",mp3:"🎵",
+    zip:"📦",json:"🔧",py:"🐍",js:"⚡",ts:"⚡",html:"🌐",css:"🎨" })[ext] || "📎";
+}
+function hidePlaceholder() {
+  if (placeholder) placeholder.style.display = "none";
+}
+
+// ── Progress bar (shown while graph nodes run) ────────────────────────────────
+// Lives inside the thinking bubble — replaced by real response when LLM starts.
+function createProgressBubble() {
+  hidePlaceholder();
+  const row = document.createElement("div");
+  row.className = "msg-row bot"; row.id = "thinking-row";
+
+  const label = document.createElement("div");
+  label.className = "role-label"; label.textContent = "Assistant";
+
+  const bubble = document.createElement("div");
+  bubble.className = "bubble bot progress-bubble";
+
+  // Thinking dots (shown before first progress event)
+  bubble.innerHTML = `
+    <div class="thinking" id="thinking-dots">
+      <span></span><span></span><span></span>
+    </div>
+    <div class="progress-steps" id="progress-steps"></div>
+  `;
+
+  row.appendChild(label);
+  row.appendChild(bubble);
+  chatBox.appendChild(row);
+  chatBox.scrollTop = chatBox.scrollHeight;
+  return bubble;
+}
+
+// Add a step to the progress bubble
+function addProgressStep(label) {
+  const steps = document.getElementById("progress-steps");
+  const dots  = document.getElementById("thinking-dots");
+  if (!steps) return;
+
+  // Hide dots once we have real progress
+  if (dots) dots.style.display = "none";
+
+  // Mark previous step as done
+  const prev = steps.querySelector(".step.active");
+  if (prev) {
+    prev.classList.remove("active");
+    prev.classList.add("done");
+    prev.querySelector(".step-spinner")?.remove();
+    const tick = document.createElement("span");
+    tick.className = "step-tick"; tick.textContent = "✓";
+    prev.appendChild(tick);
+  }
+
+  // Add new active step
+  const step = document.createElement("div");
+  step.className = "step active";
+  step.innerHTML = `
+    <span class="step-spinner"></span>
+    <span class="step-label">${escapeHtml(label)}</span>
+  `;
+  steps.appendChild(step);
+  chatBox.scrollTop = chatBox.scrollHeight;
+}
+
+// When LLM starts streaming — convert progress bubble into a real response bubble
+function convertToResponseBubble(progressBubble) {
+  progressBubble.classList.remove("progress-bubble");
+  progressBubble.classList.add("response-bubble");
+
+  // Mark the last step as done
+  const lastStep = progressBubble.querySelector(".step.active");
+  if (lastStep) {
+    lastStep.classList.remove("active");
+    lastStep.classList.add("done");
+    lastStep.querySelector(".step-spinner")?.remove();
+    const tick = document.createElement("span");
+    tick.className = "step-tick"; tick.textContent = "✓";
+    lastStep.appendChild(tick);
+  }
+
+  // Clear progress UI and prepare for text
+  const progressSteps = progressBubble.querySelector("#progress-steps");
+  const thinkingDots  = progressBubble.querySelector("#thinking-dots");
+  if (thinkingDots)  thinkingDots.remove();
+
+  // Create the text content div AFTER the steps summary
+  const textDiv = document.createElement("div");
+  textDiv.className = "response-text";
+  progressBubble.appendChild(textDiv);
+
+  return textDiv;
+}
+
+// ── Message builders ──────────────────────────────────────────────────────────
 function appendUserMessage(text, attachCards) {
   hidePlaceholder();
   const row = document.createElement("div");
   row.className = "msg-row user";
 
-  if (attachCards && attachCards.length) {
+  if (attachCards?.length) {
     const lbl = document.createElement("div");
     lbl.className = "role-label"; lbl.textContent = "You";
     const strip = document.createElement("div");
@@ -125,28 +257,16 @@ function appendUserMessage(text, attachCards) {
     row.appendChild(strip);
   }
 
-  const label = document.createElement("div");
-  label.className = "role-label"; label.textContent = "You";
-  const bubble = document.createElement("div");
-  bubble.className = "bubble user";
-  bubble.innerHTML = escapeHtml(text);
+  if (text) {
+    const label = document.createElement("div");
+    label.className = "role-label"; label.textContent = "You";
+    const bubble = document.createElement("div");
+    bubble.className = "bubble user";
+    bubble.innerHTML = escapeHtml(text);
+    if (!attachCards?.length) row.appendChild(label);
+    row.appendChild(bubble);
+  }
 
-  if (!attachCards || !attachCards.length) row.appendChild(label);
-  row.appendChild(bubble);
-  chatBox.appendChild(row);
-  chatBox.scrollTop = chatBox.scrollHeight;
-}
-
-function appendThinkingRow() {
-  hidePlaceholder();
-  const row = document.createElement("div");
-  row.className = "msg-row bot"; row.id = "thinking-row";
-  const label = document.createElement("div");
-  label.className = "role-label"; label.textContent = "Assistant";
-  const bubble = document.createElement("div");
-  bubble.className = "bubble bot";
-  bubble.innerHTML = `<div class="thinking"><span></span><span></span><span></span></div>`;
-  row.appendChild(label); row.appendChild(bubble);
   chatBox.appendChild(row);
   chatBox.scrollTop = chatBox.scrollHeight;
 }
@@ -164,78 +284,54 @@ function createBotBubble() {
   return bubble;
 }
 
+function createAttachCard(name) {
+  const card = document.createElement("div");
+  card.className = "attach-card ready";
+  card.innerHTML = `
+    <span class="ac-icon">${fileIcon(name)}</span>
+    <div class="ac-info">
+      <span class="ac-name" title="${escapeHtml(name)}">${escapeHtml(name)}</span>
+      <span class="ac-status">attached</span>
+    </div>
+  `;
+  return card;
+}
+
 // ── Markdown render per chunk ─────────────────────────────────────────────────
-// Called on every incoming chunk — marked handles partial markdown gracefully.
-// The cursor element is re-appended after each innerHTML update.
-function renderChunk(bubbleEl, fullText, cursorEl) {
-  bubbleEl.innerHTML = marked.parse(fullText);
-  // Re-run syntax highlighting on any code blocks
-  bubbleEl.querySelectorAll("pre code").forEach(block => {
+function renderChunk(el, fullText, cursorEl) {
+  el.innerHTML = marked.parse(fullText);
+  el.querySelectorAll("pre code").forEach(block => {
     if (!block.dataset.highlighted) hljs.highlightElement(block);
   });
-  // Re-attach cursor (innerHTML wipes it on each update)
-  if (cursorEl) bubbleEl.appendChild(cursorEl);
+  if (cursorEl) el.appendChild(cursorEl);
   chatBox.scrollTop = chatBox.scrollHeight;
 }
 
-// ── Send message ──────────────────────────────────────────────────────────────
+// ── Send ──────────────────────────────────────────────────────────────────────
 async function sendMessage(e) {
   e.preventDefault();
   const message = msgInput.value.trim();
-  const hasFiles = stagedFiles.length > 0;
-  if (!message && !hasFiles) return;
+  if (!message || sendBtn.disabled) return;
 
-  const filesToUpload = [...stagedFiles];
-  stagedFiles = []; stagedDiv.innerHTML = "";
+  const readyFiles       = uploadedFiles.filter(f => f.status === "ready");
+  const attachCards      = readyFiles.map(f => createAttachCard(f.file.name));
+  const active_documents = readyFiles
+    .filter(f => f.document_id)
+    .map(f => ({ document_id: f.document_id, filename: f.file.name, status: "PROCESSING" }));
 
-  const attachCards = filesToUpload.map(({ file, tempId }) =>
-    createAttachCard(file.name, tempId)
-  );
-  appendUserMessage(message || "", attachCards.length ? attachCards : null);
+  appendUserMessage(message, attachCards.length ? attachCards : null);
 
   msgInput.value = ""; msgInput.style.height = "auto";
-  sendBtn.disabled = true;
+  uploadedFiles  = []; stagedDiv.innerHTML = "";
 
-  // ── Upload documents ───────────────────────────────────────────────────────
-  let active_documents = [];
-  if (filesToUpload.length) {
-    const fd = new FormData();
-    filesToUpload.forEach(({ file }) => fd.append("documents", file));
-    if (session_id) fd.append("session_id", session_id);
-    try {
-      const res = await fetch("/api/documents/upload", {
-        method: "POST", body: fd, credentials: "include",
-      });
-      if (!res.ok) throw new Error("Upload failed");
-      const data = await res.json();
-      data.documents.forEach((doc, i) => {
-        const card = document.getElementById("ac-" + filesToUpload[i].tempId);
-        if (card) card.id = "ac-" + doc.document_id;
-        active_documents.push(doc);
-      });
-    } catch (err) {
-      console.error("Upload error:", err);
-      filesToUpload.forEach(({ tempId }) => {
-        const card = document.getElementById("ac-" + tempId);
-        if (card) {
-          card.classList.replace("uploading", "failed");
-          card.querySelector(".ac-status").textContent = "failed";
-        }
-      });
-    }
-  }
+  isStreaming = true;
+  refreshSendBtn();
 
-  // Files only — no message to send
-  if (!message) { sendBtn.disabled = false; msgInput.focus(); return; }
-
-  // ── Stream chat ────────────────────────────────────────────────────────────
   const fd = new FormData();
   fd.append("message", message);
   if (session_id) fd.append("session_id", session_id);
   if (active_documents.length)
     fd.append("active_documents", JSON.stringify(active_documents));
-
-  appendThinkingRow();
 
   try {
     const res = await fetch("/api/chat/stream", {
@@ -244,28 +340,60 @@ async function sendMessage(e) {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     await parseSSEStream(res);
   } catch (err) {
-    console.error("Chat error:", err);
+    console.error("[chat] error:", err);
     document.getElementById("thinking-row")?.remove();
     const b = createBotBubble();
     b.innerHTML = `<span style="color:var(--danger)">Failed to get a response. Please try again.</span>`;
   } finally {
-    sendBtn.disabled = false;
+    isStreaming = false;
+    refreshSendBtn();
     msgInput.focus();
   }
 }
 
-// ── SSE stream parser ─────────────────────────────────────────────────────────
+// ── SSE stream parser — handles typed events ──────────────────────────────────
+//
+// Event types from backend:
+//   { type: "session",  session_id: "abc" }
+//   { type: "progress", node: "rag_node", label: "Searching documents…" }
+//   { type: "token",    content: "Hello" }
+//   { type: "end" }
+//   { type: "error",    message: "..." }
+//
+// ── Node name → human readable label ────────────────────────────────────────
+const NODE_LABELS = {
+  load_state:              "Loading history",
+  input_guardrails:        "Checking safety",
+  check_messages_length:   "Checking memory",
+  summarize_conversation:  "Compacting our conversation",
+  document_context:        "Loading documents",
+  classify:                "Classifying intent",
+  rag_node:                "Searching documents",
+  summarize_document_node: "Reading document",
+  document_analysis_node:  "Analysing document",
+  llm_node:                "Generating response",
+  persist_data:            "Saving",
+  reject:                  "Checking policy",
+};
+
+// Nodes to silently skip — not interesting to show the user
+const SKIP_NODES = new Set(["persist_data", "load_state"]);
+
 async function parseSSEStream(response) {
   const reader  = response.body.getReader();
   const decoder = new TextDecoder();
 
-  let fullText = "";
-  let buffer   = "";
-  let bubbleEl = null;
+  let fullText       = "";
+  let buffer         = "";
+  let progressBubble = null;  // bot bubble shown during node execution
+  let textEl         = null;  // text div inside bubble for LLM tokens
+  let tokenStarted   = false; // true once first LLM token arrives
 
-  // Cursor is a real DOM node — re-appended after every innerHTML update
   const cursorEl = document.createElement("span");
   cursorEl.className = "stream-cursor";
+
+  // Show thinking bubble immediately
+  progressBubble = createProgressBubble();
 
   while (true) {
     const { done, value } = await reader.read();
@@ -273,69 +401,92 @@ async function parseSSEStream(response) {
 
     buffer += decoder.decode(value, { stream: true });
 
-    // Split on double newline (SSE spec). Also handle \r\n\r\n from some servers.
+    // Split on SSE double-newline boundary
     const parts = buffer.split(/\n\n|\r\n\r\n/);
-    buffer = parts.pop(); // keep incomplete trailing part
+    buffer = parts.pop(); // keep incomplete trailing chunk
 
     for (const part of parts) {
       const trimmed = part.trim();
-      if (!trimmed) continue;             // empty lines
-      if (trimmed.startsWith(":")) continue; // SSE comments e.g. ": ping - ..."
+      if (!trimmed) continue;
+      if (trimmed.startsWith(":")) continue; // ": ping - ..." comments
 
-      // Extract the data value — handle "data: value" or multiline "data:\ndata: value"
-      const lines = trimmed.split("\n");
-      const dataLine = lines.find(l => l.startsWith("data:"));
+      // Extract data line
+      const dataLine = trimmed.split("\n").find(l => l.startsWith("data:"));
       if (!dataLine) continue;
 
-      const data = dataLine.replace(/^data:\s*/, "").trim();
-      if (!data) continue;
+      const raw = dataLine.replace(/^data:\s*/, "").trim();
+      if (!raw) continue;
 
-      // ── Session ID ─────────────────────────────────────────────────────────
-      if (data.startsWith("SESSION:")) {
-        session_id = data.replace("SESSION:", "").trim();
+      // ── SESSION:<id>  (plain string, not JSON) ────────────────────────────
+      if (raw.startsWith("SESSION:")) {
+        session_id = raw.replace("SESSION:", "").trim();
         sessionLabel.textContent = "session: " + session_id.slice(0, 8) + "…";
         continue;
       }
 
-      // ── End / Error ────────────────────────────────────────────────────────
-      if (data === "[END]" || data === "[ERROR]") {
-        document.getElementById("thinking-row")?.remove();
+      // ── [END] / [ERROR]  (plain strings) ─────────────────────────────────
+      if (raw === "[END]" || raw === "[ERROR]") {
         cursorEl.remove();
 
-        if (data === "[ERROR]") {
-          if (!bubbleEl) bubbleEl = createBotBubble();
-          bubbleEl.innerHTML = `<span style="color:var(--danger)">An error occurred.</span>`;
-        } else if (!fullText) {
-          if (!bubbleEl) bubbleEl = createBotBubble();
-          bubbleEl.innerHTML = `<span style="color:var(--text-sub)">No response.</span>`;
-        } else {
-          // Final clean render — no cursor
-          bubbleEl.innerHTML = marked.parse(fullText);
-          bubbleEl.querySelectorAll("pre code").forEach(b => hljs.highlightElement(b));
+        if (raw === "[ERROR]") {
+          if (progressBubble) {
+            progressBubble.innerHTML =
+              `<span style="color:var(--danger)">An error occurred. Please try again.</span>`;
+          }
+        } else if (!tokenStarted) {
+          // Graph finished but no LLM tokens were ever sent
+          if (progressBubble) {
+            progressBubble.innerHTML =
+              `<span style="color:var(--text-sub)">No response.</span>`;
+          }
+        } else if (textEl) {
+          // Final clean markdown render — no cursor
+          textEl.innerHTML = marked.parse(fullText);
+          textEl.querySelectorAll("pre code").forEach(b => hljs.highlightElement(b));
           chatBox.scrollTop = chatBox.scrollHeight;
         }
         return;
       }
 
-      // ── Content chunk ──────────────────────────────────────────────────────
+      // ── JSON events ───────────────────────────────────────────────────────
+      let event;
       try {
-        const parsed = JSON.parse(data);
-        if (parsed.content) {
-          // First chunk: remove thinking dots, create bubble
-          if (!bubbleEl) {
-            document.getElementById("thinking-row")?.remove();
-            bubbleEl = createBotBubble();
-          }
-          fullText += parsed.content;
-          // Render markdown on every chunk with blinking cursor
-          renderChunk(bubbleEl, fullText, cursorEl);
+        event = JSON.parse(raw);
+      } catch {
+        // Not JSON and not a known plain string — ignore
+        console.warn("[SSE] unrecognised data:", raw);
+        continue;
+      }
+
+      // ── {"type": "progress", "node": "rag_node"} ──────────────────────────
+      // Emitted by your backend for each graph node that runs.
+      // Only show before LLM tokens start — once streaming begins, ignore.
+      if (event.type === "progress" && event.node) {
+        if (!tokenStarted && !SKIP_NODES.has(event.node)) {
+          const label = NODE_LABELS[event.node] || event.node.replace(/_/g, " ");
+          addProgressStep(label);
         }
-      } catch (err) {
-        console.error("JSON parse error:", err, "raw data:", data);
+        continue;
+      }
+
+      // ── {"content": "..."} — LLM token chunk ─────────────────────────────
+      // Your backend sends raw content chunks (no "type" field).
+      if (event.content) {
+        if (!tokenStarted) {
+          // First token: convert the progress bubble into a response bubble
+          tokenStarted = true;
+          textEl = convertToResponseBubble(progressBubble);
+        }
+        fullText += event.content;
+        renderChunk(textEl, fullText, cursorEl);
+        continue;
       }
     }
   }
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────────
-window.addEventListener("load", () => msgInput.focus());
+window.addEventListener("load", () => {
+  refreshSendBtn();
+  msgInput.focus();
+});

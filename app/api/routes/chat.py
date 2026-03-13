@@ -7,7 +7,7 @@ from fastapi.templating import Jinja2Templates
 from sse_starlette.sse import EventSourceResponse
 
 from app.auth.utility import get_current_active_user
-from app.graph.builder import graph
+# from app.graph.builder import build_graph
 from app.graph.chatstate import ChatState
 from app.models.connection import get_db
 
@@ -21,10 +21,13 @@ async def chat_home(
     request: Request,
     user=Depends(get_current_active_user),
 ):
-    return templates.TemplateResponse("chat.html", {
-        "request": request,
-        "is_authenticated": True,
-    })
+    return templates.TemplateResponse(
+        "chat.html",
+        {
+            "request": request,
+            "is_authenticated": True,
+        },
+    )
 
 
 @chat_router.post("/stream")
@@ -64,26 +67,34 @@ async def stream_chat(
 
     async def event_generator():
         try:
-            yield f"SESSION:{session_id}"
+            yield {json.dumps({'type': 'session', 'session_id': session_id})}
+            graph = request.app.state.graph
 
-            async for msg, metadata in graph.astream(
+
+            async for mode, chunk in graph.astream(
                 initial_state,
-                stream_mode="messages",
+                stream_mode=["messages", "updates"],
+                config={"configurable": {"thread_id": session_id}},
             ):
                 if await request.is_disconnected():
                     print("Client disconnected")
                     break
+                if mode == "messages":
+                    msg, metadata = chunk
+                    # if msg.content and metadata.get("langgraph_node") == "llm_node":
+                    if msg.content and "llm_response" in metadata.get("tags", []):
+                        yield json.dumps({"type": "chunk","content": msg.content})
+                elif mode == "updates":
+                    node_name = list(chunk.keys())[0]
+                    yield json.dumps({"type": "progress", "node": node_name})
 
-                if msg.content and metadata.get("langgraph_node") == "llm_node":
-                    
-                    yield json.dumps({"content": msg.content})
-
-            yield "[END]"
+            yield json.dumps({"type": "end"})
 
         except Exception as e:
             print(f"Chat streaming error: {e}")
             import traceback
+
             traceback.print_exc()
-            yield "[ERROR]"
+            yield json.dumps({"type": "error"})
 
     return EventSourceResponse(event_generator())
