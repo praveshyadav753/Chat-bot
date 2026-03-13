@@ -9,10 +9,11 @@ from fastapi.templating import Jinja2Templates
 from app.api.routes.auth import auth_route
 from app.api.routes.chat import chat_router
 from app.auth.utility import get_current_user, get_token
+from app.graph.builder import build_graph
 from app.models import document, user
 from app.api.routes import documents, update__event
 from app.models.connection import engine, init_db, get_db
-
+from app.core.checkpointer import get_checkpointer
 
 async def warm_up_resources():
     import asyncio
@@ -41,6 +42,8 @@ async def lifespan(app: FastAPI):
     print("App is starting...")
     await init_db()
     await warm_up_resources()   
+    await get_checkpointer()
+    app.state.graph = await build_graph()
     yield
     await engine.dispose()
     print("App is shutting down...")

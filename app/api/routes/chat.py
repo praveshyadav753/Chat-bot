@@ -7,7 +7,7 @@ from fastapi.templating import Jinja2Templates
 from sse_starlette.sse import EventSourceResponse
 
 from app.auth.utility import get_current_active_user
-from app.graph.builder import graph
+# from app.graph.builder import build_graph
 from app.graph.chatstate import ChatState
 from app.models.connection import get_db
 
@@ -68,6 +68,8 @@ async def stream_chat(
     async def event_generator():
         try:
             yield {json.dumps({'type': 'session', 'session_id': session_id})}
+            graph = request.app.state.graph
+
 
             async for mode, chunk in graph.astream(
                 initial_state,

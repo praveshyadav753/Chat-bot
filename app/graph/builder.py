@@ -17,6 +17,7 @@ from app.graph.utils import message_router
 from app.graph.nodes.memory_loder import load_state_node
 from langgraph.checkpoint.memory import InMemorySaver
 from IPython.display import Image, display
+from app.core.checkpointer import get_checkpointer
 
 
 builder = StateGraph(ChatState)
@@ -36,10 +37,12 @@ builder.add_node("reject", reject_node)
 builder.add_node("persist_data",persist_message_node)
 
 
-builder.add_edge(START, "load_state")
+# builder.add_edge(START, "load_state")
+builder.add_edge(START, "input_guardrails")
+
 
 # Load memory → guardrail
-builder.add_edge("load_state", "input_guardrails")
+# builder.add_edge("load_state", "input_guardrails")
 
 # Guardrail routing
 builder.add_conditional_edges(
@@ -84,9 +87,10 @@ builder.add_edge("llm_node","persist_data")
 builder.add_edge("persist_data", END)
 builder.add_edge("reject", END)
 
+async def build_graph():
+    checkpointer = await get_checkpointer()
 
-checkpointer = InMemorySaver()
+    graph = builder.compile(checkpointer=checkpointer)
 
-graph = builder.compile(checkpointer=checkpointer)
-
-display(Image(graph.get_graph().draw_mermaid_png()))
+    # display(Image(graph.get_graph().draw_mermaid_png()))
+    return graph

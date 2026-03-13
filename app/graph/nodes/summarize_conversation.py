@@ -1,39 +1,48 @@
+from langchain_core.messages import HumanMessage, AIMessage, RemoveMessage
 from app.graph.chatstate import ChatState
-from app.REG.query.query_db import get_document_chunks
-from app.REG.Schema import RetrievalUser
-from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
-import logging
 from app.graph.model import LLMFactory
+import logging
 
 logger = logging.getLogger(__name__)
 
+EXCHANGES_TO_KEEP = 5  # keep last 5 exchanges = last 10 messages in checkpoint
 
 
 async def summarize_conversation(state: ChatState) -> ChatState:
+    print("[summarize_conversation] running...")
 
-    messages = state.get("conversation_messages", [])
+    messages        = state.get("messages", [])
     current_summary = state.get("summary") or ""
-    user_input = state.get("user_input")
 
-    if not messages:
-        print("  → No old messages to summarize")
-        return state
+    summarizable = [m for m in messages if isinstance(m, (HumanMessage, AIMessage))]
 
-    history_text = ""
-    for msg in messages:
-        role = msg.get("role", "").upper()
-        content = msg.get("content", "")
-        
-        # Truncate very long messages
-        # if len(content) > 300:
-        #     content = content[:300] + "..."
-        
-        history_text += f"{role}: {content}\n\n"
+    if not summarizable:
+        print("[summarize_conversation] nothing to summarize")
+        return {**state, "need_conversation_summary": False}
 
-    print(f"  → Conversation history: {len(history_text)} chars")
-    print(f"  → Current summary: {len(current_summary)} chars")
+    conversation_text = "\n".join(
+        f"{'User' if isinstance(m, HumanMessage) else 'Assistant'}: {m.content}"
+        for m in summarizable
+    )
 
-    #  Use LLM to create/update summary
+    if current_summary:
+        summary_instruction = (
+            f"This is the summary of the conversation so far:\n{current_summary}\n\n"
+            "Extend the summary by taking into account the new messages above:"
+        )
+    else:
+        summary_instruction = (
+            "Create a concise summary of the conversation above.\n"
+            "Include:\n"
+            "- User's main goals and questions\n"
+            "- Key decisions or conclusions\n"
+            "- Important facts, names, or numbers mentioned\n"
+            "- Any follow-up items\n"
+            "Write in 3rd person. Skip small talk. Use bullet points."
+        )
+
+    messages_for_llm = conversation_text + [HumanMessage(content=summary_instruction)]
+
     try:
         llm = LLMFactory.create_llm(
             provider="gemini",
@@ -41,48 +50,28 @@ async def summarize_conversation(state: ChatState) -> ChatState:
             temperature=0.3,
         )
 
-        prompt = f"""
-You are a conversation summarizer. Your job is to create a concise summary that preserves important context.
+        response      = await llm.ainvoke(messages_for_llm)
+        new_summary   = response.content.strip()
 
-{'PREVIOUS SUMMARY (update this):\n' + current_summary + '\n\n' if current_summary else 'CREATE A NEW SUMMARY:\n\n'}
+        # RemoveMessage AFTER successful summary 
+        keep_count = EXCHANGES_TO_KEEP * 2  # 5 exchanges = 10 messages
+        messages_to_delete = messages[:-keep_count] if len(messages) > keep_count else []
+        deletions = [RemoveMessage(id=m.id) for m in messages_to_delete]
 
-CONVERSATION TO SUMMARIZE:
-{history_text}
-
-RULES:
-1. Max 350 words
-2. Include:
-   - User's main goals and questions
-   - Key decisions or conclusions
-   - Important facts, names, or numbers
-   - Any follow-up items mentioned
-3. Write in 2nd person (about "the user")
-4. Remove small talk and greetings
-5. If previous summary exists, update it with new information
-6. Use bullet points for clarity
-7. Focus on what's important for context
-
-SUMMARY (350 words max):
-"""
-
-        response = await llm.ainvoke([HumanMessage(content=prompt)])
-        new_summary = response.content.strip()
-
-        print(f"Summary created: {len(new_summary)} chars")
+        print(f"[summarize_conversation] summary={len(new_summary)} chars "
+              f"removed={len(deletions)} kept={keep_count}")
 
         return {
             **state,
-            "summary": new_summary, 
-            "user_input": user_input, 
-            "summary_type": None,  
+            "summary":new_summary,
+            "messages":deletions,  
+            "conversation_messages":[],         
+            "need_conversation_summary": False,
         }
 
     except Exception as e:
-        logger.error(f"Error summarizing conversation: {str(e)}")
-        print(f" Summarization error: {str(e)}")
-        
-        # Continue without updating summary
+        logger.error(f"[summarize_conversation] failed: {e}")
         return {
             **state,
-            "user_input": user_input,
+            "need_conversation_summary": False,
         }

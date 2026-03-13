@@ -52,6 +52,8 @@ class ChatState(TypedDict):
     injection_detected: bool
     out_of_scope: bool
     validation_error: Optional[str]
+    blocked: bool
+
    
     cache_hit: bool
     status: str  # STARTED | CLASSIFIED | RETRIEVED | RERANKED | GENERATED | VALIDATED | TOOL_RUNNING | WAITING_APPROVAL | COMPLETED | ERROR

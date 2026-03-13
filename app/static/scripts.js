@@ -365,7 +365,7 @@ const NODE_LABELS = {
   load_state:              "Loading history",
   input_guardrails:        "Checking safety",
   check_messages_length:   "Checking memory",
-  summarize_conversation:  "Summarizing history",
+  summarize_conversation:  "Compacting our conversation",
   document_context:        "Loading documents",
   classify:                "Classifying intent",
   rag_node:                "Searching documents",

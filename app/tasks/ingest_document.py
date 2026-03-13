@@ -54,13 +54,11 @@ def store_rag_doc(
             logger.error("Document not found in DB")
             return False
 
-        # 🔹 Update status
         doc.status = "PROCESSING"
         db.commit()
 
         publish_status(document_id, "PROCESSING", session_id=session_id)
 
-        # 🔹 Parse document
         docs = process_document(
             file_path,
             document_id,
@@ -80,10 +78,10 @@ def store_rag_doc(
             publish_status(document_id, "FAILED", session_id)
             return False
 
-        # 🔹 Store embeddings
+        #  Store embeddings
         store_documents(docs)
 
-        # 🔹 Mark ready
+        #  Mark ready
         doc.status = "READY"
         db.commit()
 
