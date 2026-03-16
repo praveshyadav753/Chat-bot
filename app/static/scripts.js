@@ -6,8 +6,6 @@ marked.setOptions({ gfm: true, breaks: true });
 // ── State ─────────────────────────────────────────────────────────────────────
 let session_id = null;
 let isStreaming = false;
-
-// { tempId, file, document_id, status: "uploading"|"processing"|"ready"|"failed" }
 let uploadedFiles = [];
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
@@ -24,9 +22,7 @@ function refreshSendBtn() {
   const pending = uploadedFiles.filter(
     f => f.status === "uploading" || f.status === "processing"
   ).length;
-
   sendBtn.disabled = pending > 0 || isStreaming;
-
   if (isStreaming) {
     sendBtn.textContent = "Sending…";
   } else if (pending > 0) {
@@ -49,7 +45,7 @@ msgInput.addEventListener("keydown", e => {
   if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(e); }
 });
 
-// ── File input → immediate upload ────────────────────────────────────────────
+// ── File input ────────────────────────────────────────────────────────────────
 fileInput.addEventListener("change", () => {
   Array.from(fileInput.files).forEach(file => {
     const tempId = crypto.randomUUID();
@@ -105,12 +101,11 @@ function removeChip(tempId) {
   refreshSendBtn();
 }
 
-// ── Upload file immediately on selection ──────────────────────────────────────
+// ── Upload file ───────────────────────────────────────────────────────────────
 async function uploadFile(entry) {
   const fd = new FormData();
   fd.append("documents", entry.file);
   if (session_id) fd.append("session_id", session_id);
-
   try {
     const res  = await fetch("/api/documents/upload", { method: "POST", body: fd, credentials: "include" });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -153,25 +148,30 @@ function hidePlaceholder() {
   if (placeholder) placeholder.style.display = "none";
 }
 
-// ── Progress bar (shown while graph nodes run) ────────────────────────────────
-// Lives inside the thinking bubble — replaced by real response when LLM starts.
+// ── Progress bubble ───────────────────────────────────────────────────────────
+// Returns the bubble element — steps and text divs are queried
+// RELATIVELY off this element, never by global ID.
+// This prevents multi-message bugs where querySelector finds
+// the wrong element from a previous message.
 function createProgressBubble() {
   hidePlaceholder();
   const row = document.createElement("div");
-  row.className = "msg-row bot"; row.id = "thinking-row";
+  row.className = "msg-row bot";
+  row.id = "thinking-row";  // only one thinking row exists at a time — safe
 
   const label = document.createElement("div");
-  label.className = "role-label"; label.textContent = "Assistant";
+  label.className = "role-label";
+  label.textContent = "Assistant";
 
   const bubble = document.createElement("div");
   bubble.className = "bubble bot progress-bubble";
 
-  // Thinking dots (shown before first progress event)
+  // Use classes not IDs — multiple messages can coexist in DOM
   bubble.innerHTML = `
-    <div class="thinking" id="thinking-dots">
+    <div class="thinking-dots">
       <span></span><span></span><span></span>
     </div>
-    <div class="progress-steps" id="progress-steps"></div>
+    <div class="progress-steps"></div>
   `;
 
   row.appendChild(label);
@@ -181,27 +181,26 @@ function createProgressBubble() {
   return bubble;
 }
 
-// Add a step to the progress bubble
-function addProgressStep(label) {
-  const steps = document.getElementById("progress-steps");
-  const dots  = document.getElementById("thinking-dots");
+// Add a step — queries RELATIVE to bubble, not global DOM
+function addProgressStep(bubble, label) {
+  const steps = bubble.querySelector(".progress-steps");  // ← relative
+  const dots  = bubble.querySelector(".thinking-dots");   // ← relative
   if (!steps) return;
 
-  // Hide dots once we have real progress
   if (dots) dots.style.display = "none";
 
-  // Mark previous step as done
+  // Mark previous step done
   const prev = steps.querySelector(".step.active");
   if (prev) {
     prev.classList.remove("active");
     prev.classList.add("done");
     prev.querySelector(".step-spinner")?.remove();
     const tick = document.createElement("span");
-    tick.className = "step-tick"; tick.textContent = "✓";
+    tick.className = "step-tick";
+    tick.textContent = "✓";
     prev.appendChild(tick);
   }
 
-  // Add new active step
   const step = document.createElement("div");
   step.className = "step active";
   step.innerHTML = `
@@ -212,31 +211,30 @@ function addProgressStep(label) {
   chatBox.scrollTop = chatBox.scrollHeight;
 }
 
-// When LLM starts streaming — convert progress bubble into a real response bubble
-function convertToResponseBubble(progressBubble) {
-  progressBubble.classList.remove("progress-bubble");
-  progressBubble.classList.add("response-bubble");
+// Convert progress bubble → response bubble, return textEl
+function convertToResponseBubble(bubble) {
+  bubble.classList.remove("progress-bubble");
+  bubble.classList.add("response-bubble");
 
-  // Mark the last step as done
-  const lastStep = progressBubble.querySelector(".step.active");
+  // Mark last active step done
+  const lastStep = bubble.querySelector(".step.active");  // ← relative
   if (lastStep) {
     lastStep.classList.remove("active");
     lastStep.classList.add("done");
     lastStep.querySelector(".step-spinner")?.remove();
     const tick = document.createElement("span");
-    tick.className = "step-tick"; tick.textContent = "✓";
+    tick.className = "step-tick";
+    tick.textContent = "✓";
     lastStep.appendChild(tick);
   }
 
-  // Clear progress UI and prepare for text
-  const progressSteps = progressBubble.querySelector("#progress-steps");
-  const thinkingDots  = progressBubble.querySelector("#thinking-dots");
-  if (thinkingDots)  thinkingDots.remove();
+  // Remove thinking dots
+  bubble.querySelector(".thinking-dots")?.remove();       // ← relative
 
-  // Create the text content div AFTER the steps summary
+  // Append text div after steps summary
   const textDiv = document.createElement("div");
   textDiv.className = "response-text";
-  progressBubble.appendChild(textDiv);
+  bubble.appendChild(textDiv);
 
   return textDiv;
 }
@@ -269,19 +267,6 @@ function appendUserMessage(text, attachCards) {
 
   chatBox.appendChild(row);
   chatBox.scrollTop = chatBox.scrollHeight;
-}
-
-function createBotBubble() {
-  hidePlaceholder();
-  const row = document.createElement("div");
-  row.className = "msg-row bot";
-  const label = document.createElement("div");
-  label.className = "role-label"; label.textContent = "Assistant";
-  const bubble = document.createElement("div");
-  bubble.className = "bubble bot";
-  row.appendChild(label); row.appendChild(bubble);
-  chatBox.appendChild(row);
-  return bubble;
 }
 
 function createAttachCard(name) {
@@ -342,8 +327,15 @@ async function sendMessage(e) {
   } catch (err) {
     console.error("[chat] error:", err);
     document.getElementById("thinking-row")?.remove();
-    const b = createBotBubble();
-    b.innerHTML = `<span style="color:var(--danger)">Failed to get a response. Please try again.</span>`;
+    const row = document.createElement("div");
+    row.className = "msg-row bot";
+    const label = document.createElement("div");
+    label.className = "role-label"; label.textContent = "Assistant";
+    const bubble = document.createElement("div");
+    bubble.className = "bubble bot";
+    bubble.innerHTML = `<span style="color:var(--danger)">Failed to get a response. Please try again.</span>`;
+    row.appendChild(label); row.appendChild(bubble);
+    chatBox.appendChild(row);
   } finally {
     isStreaming = false;
     refreshSendBtn();
@@ -351,48 +343,35 @@ async function sendMessage(e) {
   }
 }
 
-// ── SSE stream parser — handles typed events ──────────────────────────────────
-//
-// Event types from backend:
-//   { type: "session",  session_id: "abc" }
-//   { type: "progress", node: "rag_node", label: "Searching documents…" }
-//   { type: "token",    content: "Hello" }
-//   { type: "end" }
-//   { type: "error",    message: "..." }
-//
-// ── Node name → human readable label ────────────────────────────────────────
+// ── Node name → human readable label ─────────────────────────────────────────
 const NODE_LABELS = {
-  load_state:              "Loading history",
   input_guardrails:        "Checking safety",
-  check_messages_length:   "Checking memory",
-  summarize_conversation:  "Compacting our conversation",
-  document_context:        "Loading documents",
-  classify:                "Classifying intent",
+  summarize_conversation:  "Compacting conversation",
+  document_context:        "fetching session context",
+  classify:                "analyzing input",
   rag_node:                "Searching documents",
   summarize_document_node: "Reading document",
   document_analysis_node:  "Analysing document",
   llm_node:                "Generating response",
-  persist_data:            "Saving",
   reject:                  "Checking policy",
 };
 
-// Nodes to silently skip — not interesting to show the user
 const SKIP_NODES = new Set(["persist_data", "load_state"]);
 
+// ── SSE stream parser ─────────────────────────────────────────────────────────
 async function parseSSEStream(response) {
   const reader  = response.body.getReader();
   const decoder = new TextDecoder();
 
-  let fullText       = "";
-  let buffer         = "";
-  let progressBubble = null;  // bot bubble shown during node execution
-  let textEl         = null;  // text div inside bubble for LLM tokens
-  let tokenStarted   = false; // true once first LLM token arrives
+  let fullText     = "";
+  let buffer       = "";
+  let progressBubble = null;
+  let textEl         = null;
+  let tokenStarted   = false;
 
   const cursorEl = document.createElement("span");
   cursorEl.className = "stream-cursor";
 
-  // Show thinking bubble immediately
   progressBubble = createProgressBubble();
 
   while (true) {
@@ -400,47 +379,51 @@ async function parseSSEStream(response) {
     if (done) break;
 
     buffer += decoder.decode(value, { stream: true });
-
-    // Split on SSE double-newline boundary
     const parts = buffer.split(/\n\n|\r\n\r\n/);
-    buffer = parts.pop(); // keep incomplete trailing chunk
+    buffer = parts.pop();
 
     for (const part of parts) {
       const trimmed = part.trim();
-      if (!trimmed) continue;
-      if (trimmed.startsWith(":")) continue; // ": ping - ..." comments
+      if (!trimmed || trimmed.startsWith(":")) continue;
 
-      // Extract data line
       const dataLine = trimmed.split("\n").find(l => l.startsWith("data:"));
       if (!dataLine) continue;
 
       const raw = dataLine.replace(/^data:\s*/, "").trim();
       if (!raw) continue;
 
-      // ── SESSION:<id>  (plain string, not JSON) ────────────────────────────
+      // ── Plain string events ───────────────────────────────────────────────
+      // Keep SESSION: support in case of legacy backend
       if (raw.startsWith("SESSION:")) {
         session_id = raw.replace("SESSION:", "").trim();
         sessionLabel.textContent = "session: " + session_id.slice(0, 8) + "…";
         continue;
       }
 
-      // ── [END] / [ERROR]  (plain strings) ─────────────────────────────────
-      if (raw === "[END]" || raw === "[ERROR]") {
-        cursorEl.remove();
+      // ── JSON events ───────────────────────────────────────────────────────
+      let event;
+      try { event = JSON.parse(raw); }
+      catch { console.warn("[SSE] unrecognised:", raw); continue; }
 
-        if (raw === "[ERROR]") {
-          if (progressBubble) {
+      // {"type":"session","session_id":"..."}
+      if (event.type === "session" && event.session_id) {
+        session_id = event.session_id;
+        sessionLabel.textContent = "session: " + session_id.slice(0, 8) + "…";
+        continue;
+      }
+
+      // {"type":"end"} or {"type":"error"}
+      if (event.type === "end" || event.type === "error") {
+        cursorEl.remove();
+        if (event.type === "error") {
+          if (progressBubble)
             progressBubble.innerHTML =
               `<span style="color:var(--danger)">An error occurred. Please try again.</span>`;
-          }
         } else if (!tokenStarted) {
-          // Graph finished but no LLM tokens were ever sent
-          if (progressBubble) {
+          if (progressBubble)
             progressBubble.innerHTML =
               `<span style="color:var(--text-sub)">No response.</span>`;
-          }
         } else if (textEl) {
-          // Final clean markdown render — no cursor
           textEl.innerHTML = marked.parse(fullText);
           textEl.querySelectorAll("pre code").forEach(b => hljs.highlightElement(b));
           chatBox.scrollTop = chatBox.scrollHeight;
@@ -448,32 +431,18 @@ async function parseSSEStream(response) {
         return;
       }
 
-      // ── JSON events ───────────────────────────────────────────────────────
-      let event;
-      try {
-        event = JSON.parse(raw);
-      } catch {
-        // Not JSON and not a known plain string — ignore
-        console.warn("[SSE] unrecognised data:", raw);
-        continue;
-      }
-
-      // ── {"type": "progress", "node": "rag_node"} ──────────────────────────
-      // Emitted by your backend for each graph node that runs.
-      // Only show before LLM tokens start — once streaming begins, ignore.
+      // {"type":"progress","node":"rag_node"}
       if (event.type === "progress" && event.node) {
         if (!tokenStarted && !SKIP_NODES.has(event.node)) {
           const label = NODE_LABELS[event.node] || event.node.replace(/_/g, " ");
-          addProgressStep(label);
+          addProgressStep(progressBubble, label);
         }
         continue;
       }
 
-      // ── {"content": "..."} — LLM token chunk ─────────────────────────────
-      // Your backend sends raw content chunks (no "type" field).
-      if (event.content) {
+      // {"type":"chunk","content":"..."} — LLM token
+      if (event.type === "chunk" && event.content) {
         if (!tokenStarted) {
-          // First token: convert the progress bubble into a response bubble
           tokenStarted = true;
           textEl = convertToResponseBubble(progressBubble);
         }

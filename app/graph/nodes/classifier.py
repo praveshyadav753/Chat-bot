@@ -6,16 +6,23 @@ import re
 
 
 class Intent(str, Enum):
-    FACTUAL = "factual"
+    FACTUAL      = "factual"
     DOC_ANALYSIS = "doc_analysis"
-    COMPARISON = "comparison"
+    COMPARISON   = "comparison"
     CONVERSATION = "conversation"
-    SUMMARY = "summary"
-    TOOL = "tool"
+    SUMMARY      = "summary"
+    TOOL         = "tool"
     OUT_OF_SCOPE = "out_of_scope"
 
 
 VALID_LABELS = " | ".join(i.value for i in Intent)
+
+
+SIMPLE_TOOLS_DESCRIPTION = """
+- `web_search`        → Search the web for current news, prices, facts, or real-time data
+- `fetch_url`         → Fetch and read the content of a URL/link the user provided
+- `convert_currency`  → Convert an amount between currencies using live exchange rates
+""".strip()
 
 INTENT_PROMPT = """
 You are an intent classifier and document resolver for a RAG-based document assistant.
@@ -42,12 +49,22 @@ You are an intent classifier and document resolver for a RAG-based document assi
 
 ### General intents:
 - `conversation` → Chitchat, greetings, or no ready documents available
-- `tool`         → Needs calculation, API, or external lookup
+- `tool`         → Needs an external tool (see available tools below)
 - `out_of_scope` → Completely outside the assistant's domain
+
+## Available Simple Tools (only for `tool` intent)
+{simple_tools_description}
+
+## Tool Selection Rules (only when intent is `tool`)
+- Set `selected_tools` to a list of tool names FROM the list above that should run
+- Set `selected_tools: []` if the tool needed is NOT in the list above (LLM will handle it)
+- Set `sequential: true` if tool 2 needs the output of tool 1 (e.g. search price THEN convert)
+- Set `sequential: false` if tools are independent and can run at the same time
 
 ## Output Rules
 - `resolved_document_ids` must be [] for: `conversation`, `tool`, `out_of_scope`
 - Only return IDs that appear in the document lists above
+- `selected_tools` and `sequential` only matter when intent is `tool`
 
 ## Output Format
 Respond ONLY with a valid JSON object. No explanation, no markdown, no extra text.
@@ -55,6 +72,8 @@ Respond ONLY with a valid JSON object. No explanation, no markdown, no extra tex
 {{
   "intent": "<one of: {valid_labels}>",
   "resolved_document_ids": ["<file_id>", ...],
+  "selected_tools": [],
+  "sequential": false,
   "reasoning": "<one short sentence>"
 }}
 
@@ -73,7 +92,7 @@ def _format_docs(docs: list[dict]) -> str:
 
 
 def _extract_json(text: str) -> dict:
-    """Extracts JSON from LLM response, stripping markdown fences if present."""
+    """Extract JSON from LLM response, strip markdown fences if present."""
     match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.DOTALL)
     if match:
         text = match.group(1)
@@ -81,10 +100,7 @@ def _extract_json(text: str) -> dict:
 
 
 def _build_ready_ids(session_documents: list[dict], active_docs: list[dict]) -> set[str]:
-    """
-    Builds a set of all valid ready file_ids from both document pools.
-    This prevents LLM-resolved IDs from active_docs being silently dropped.
-    """
+    """Build set of all valid ready file_ids from both document pools."""
     all_docs = session_documents + active_docs
     return {
         doc["file_id"]
@@ -93,21 +109,20 @@ def _build_ready_ids(session_documents: list[dict], active_docs: list[dict]) -> 
     }
 
 
+# ── Known simple tool names — validate classifier output against this ─────────
+_SIMPLE_TOOL_NAMES = {"web_search", "fetch_url"}
+
+
 async def classify_and_resolve(
     query: str,
     session_documents: list[dict],
     active_docs: list[dict],
-) -> tuple[Intent, list[str]]:
+) -> tuple[Intent, list[str], list[str], bool]:
     """
-    Classifies intent and resolves relevant document IDs in a single LLM call.
-
-    Args:
-        query:            The user's input.
-        session_documents: All docs in the session [{file_id, filename, status}].
-        active_docs:      Recently uploaded/active docs, same shape.
+    Classifies intent, resolves document IDs, and selects tools in ONE LLM call.
 
     Returns:
-        Tuple of (Intent, list of validated resolved file_ids)
+        Tuple of (Intent, resolved_doc_ids, selected_tools, sequential)
     """
     llm = LLMFactory.create_llm(
         provider="gemini",
@@ -120,6 +135,7 @@ async def classify_and_resolve(
         session_docs_formatted=_format_docs(session_documents),
         active_docs_formatted=_format_docs(active_docs),
         valid_labels=VALID_LABELS,
+        simple_tools_description=SIMPLE_TOOLS_DESCRIPTION,
     )
 
     response = await llm.ainvoke(prompt)
@@ -128,51 +144,62 @@ async def classify_and_resolve(
     try:
         parsed = _extract_json(raw)
 
-        # Resolve intent
-        label = parsed.get("intent", "").strip().lower()
+        label  = parsed.get("intent", "").strip().lower()
         intent = next(
             (i for i in Intent if i.value == label),
-            Intent.CONVERSATION,  # default fallback
+            Intent.CONVERSATION,
         )
 
-        # Validate resolved IDs against both document pools
-        ready_ids = _build_ready_ids(session_documents, active_docs)
+        ready_ids    = _build_ready_ids(session_documents, active_docs)
         resolved_ids = [
             fid for fid in parsed.get("resolved_document_ids", [])
             if fid in ready_ids
         ]
 
+        # ── Tool selection 
+        # Only trust selected_tools when intent is actually tool
+        # Validate each name against known simple tools — discard unknown names
+        raw_tools = parsed.get("selected_tools", []) if intent == Intent.TOOL else []
+        selected_tools = [t for t in raw_tools if t in _SIMPLE_TOOL_NAMES]
+        sequential     = bool(parsed.get("sequential", False))
+
         print(
             f"[classifier] intent={intent.value} | "
             f"resolved_docs={resolved_ids} | "
+            f"tools={selected_tools} | "
+            f"sequential={sequential} | "
             f"reason={parsed.get('reasoning')}"
         )
-        return intent, resolved_ids
+        return intent, resolved_ids, selected_tools, sequential
 
     except (json.JSONDecodeError, KeyError) as e:
         print(f"[classifier] Failed to parse LLM response: {e}\nRaw: {raw}")
-        return Intent.CONVERSATION, []
+        return Intent.CONVERSATION, [], [], False
 
 
 async def classifier_node(state: ChatState) -> ChatState:
     print("[classifier_node] Running...")
 
     session_documents = state.get("session_documents", [])
-    active_docs = state.get("active_documents", [])  # safe default to []
+    active_docs       = state.get("active_documents", [])
 
     try:
-        intent, resolved_document_ids = await classify_and_resolve(
+        intent, resolved_document_ids, selected_tools, sequential = await classify_and_resolve(
             query=state["user_input"],
             session_documents=session_documents,
             active_docs=active_docs,
         )
     except Exception as e:
         print(f"[classifier_node] Unexpected error: {e}. Defaulting to CONVERSATION.")
-        intent = Intent.CONVERSATION
+        intent                = Intent.CONVERSATION
         resolved_document_ids = []
+        selected_tools        = []
+        sequential            = False
 
     return {
         **state,
-        "intent": intent.value,
-        "document_id": resolved_document_ids,
+        "intent":          intent.value,
+        "document_id":     resolved_document_ids,
+        "selected_tools":  selected_tools,
+        "sequential":      sequential,
     }

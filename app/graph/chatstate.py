@@ -24,6 +24,9 @@ class ChatState(TypedDict):
     role:str
     access_level:int
     department : str
+    
+    selected_tools: Optional[List[str]]
+    sequential: Optional[bool]
 
   
     intent: Optional[str]  # RAG | TOOL | DIRECT_LLM
@@ -56,7 +59,7 @@ class ChatState(TypedDict):
 
    
     cache_hit: bool
-    status: str  # STARTED | CLASSIFIED | RETRIEVED | RERANKED | GENERATED | VALIDATED | TOOL_RUNNING | WAITING_APPROVAL | COMPLETED | ERROR
+    status: str  
     error: Optional[str]
     debug_error :Optional[str]
 

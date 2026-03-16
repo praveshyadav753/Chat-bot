@@ -41,7 +41,7 @@ async def summarize_conversation(state: ChatState) -> ChatState:
             "Write in 3rd person. Skip small talk. Use bullet points."
         )
 
-    messages_for_llm = conversation_text + [HumanMessage(content=summary_instruction)]
+    messages_for_llm = summarizable + [HumanMessage(content=summary_instruction)]
 
     try:
         llm = LLMFactory.create_llm(
