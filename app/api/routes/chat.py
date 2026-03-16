@@ -39,7 +39,7 @@ async def stream_chat(
     active_documents: Optional[str] = Form(None),
     db=Depends(get_db),
 ):
-    session_id = session_id or "abc"
+    session_id = session_id or "test"
 
     parsed_active_documents = []
     if active_documents:
@@ -67,7 +67,7 @@ async def stream_chat(
 
     async def event_generator():
         try:
-            yield {json.dumps({'type': 'session', 'session_id': session_id})}
+            yield json.dumps({'type': 'session', 'session_id': session_id})
             graph = request.app.state.graph
 
 

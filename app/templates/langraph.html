@@ -1,0 +1,1166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>LangGraph Mastery — Agentic AI Notes</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Syne:wght@400;600;700;800&family=Inter:wght@300;400;500&display=swap" rel="stylesheet"/>
+<style>
+:root {
+  --bg: #0a0a0f;
+  --surface: #111118;
+  --surface2: #1a1a24;
+  --border: #2a2a3a;
+  --border2: #3a3a50;
+  --text: #e8e8f0;
+  --muted: #7070a0;
+  --accent: #7c6ff7;
+  --accent2: #a78bfa;
+  --green: #4ade80;
+  --amber: #fbbf24;
+  --red: #f87171;
+  --teal: #2dd4bf;
+  --pink: #f472b6;
+  --mono: 'IBM Plex Mono', monospace;
+  --display: 'Syne', sans-serif;
+  --body: 'Inter', sans-serif;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+html { scroll-behavior: smooth; }
+body { background: var(--bg); color: var(--text); font-family: var(--body); font-size:15px; line-height:1.6; min-height:100vh; }
+
+/* ── GRID NOISE BACKGROUND ── */
+body::before {
+  content:''; position:fixed; inset:0; pointer-events:none; z-index:0;
+  background-image: radial-gradient(circle at 20% 20%, rgba(124,111,247,0.06) 0%, transparent 50%),
+                    radial-gradient(circle at 80% 80%, rgba(45,212,191,0.04) 0%, transparent 50%);
+}
+
+/* ── LAYOUT ── */
+.app { display:flex; min-height:100vh; position:relative; z-index:1; }
+
+/* ── SIDEBAR ── */
+.sidebar {
+  width:260px; min-height:100vh; background: var(--surface);
+  border-right: 1px solid var(--border);
+  position:sticky; top:0; height:100vh; overflow-y:auto;
+  display:flex; flex-direction:column;
+}
+.sidebar::-webkit-scrollbar { width:4px; }
+.sidebar::-webkit-scrollbar-thumb { background: var(--border2); border-radius:2px; }
+
+.sidebar-header {
+  padding:24px 20px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.sidebar-logo {
+  font-family: var(--display); font-size:13px; font-weight:700;
+  letter-spacing:0.15em; text-transform:uppercase; color: var(--accent2);
+  margin-bottom:4px;
+}
+.sidebar-sub { font-size:11px; color: var(--muted); font-family: var(--mono); }
+
+.search-wrap { padding:12px 16px; }
+.search-input {
+  width:100%; background: var(--surface2); border:1px solid var(--border);
+  border-radius:6px; padding:7px 10px; font-size:12px; color: var(--text);
+  font-family: var(--mono); outline:none; transition: border-color 0.2s;
+}
+.search-input:focus { border-color: var(--accent); }
+.search-input::placeholder { color: var(--muted); }
+
+.nav-section { padding:8px 16px 4px; }
+.nav-section-title {
+  font-size:10px; font-weight:600; letter-spacing:0.12em;
+  text-transform:uppercase; color: var(--muted); margin-bottom:4px;
+  font-family: var(--mono);
+}
+.nav-item {
+  display:flex; align-items:center; gap:8px;
+  padding:7px 10px; border-radius:6px; cursor:pointer;
+  font-size:12px; color: var(--muted); transition: all 0.15s;
+  margin-bottom:1px; border:1px solid transparent;
+}
+.nav-item:hover { background: var(--surface2); color: var(--text); }
+.nav-item.active { background: rgba(124,111,247,0.12); color: var(--accent2); border-color: rgba(124,111,247,0.2); }
+.nav-dot { width:6px; height:6px; border-radius:50%; flex-shrink:0; }
+.nav-count {
+  margin-left:auto; font-size:10px; background: var(--surface2);
+  padding:1px 6px; border-radius:10px; color: var(--muted);
+}
+
+.sidebar-footer { margin-top:auto; padding:16px; border-top:1px solid var(--border); }
+.total-badge { font-size:11px; color: var(--muted); font-family: var(--mono); }
+.total-num { color: var(--accent2); font-weight:600; }
+
+/* ── MAIN ── */
+.main { flex:1; padding:32px 36px; max-width:1000px; }
+
+.page-header { margin-bottom:32px; }
+.page-title {
+  font-family: var(--display); font-size:28px; font-weight:800;
+  color: var(--text); line-height:1.2; margin-bottom:6px;
+}
+.page-title span { color: var(--accent2); }
+.page-desc { font-size:13px; color: var(--muted); font-family: var(--mono); }
+
+/* ── CARDS GRID ── */
+.cards-grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap:16px; }
+.card {
+  background: var(--surface); border:1px solid var(--border);
+  border-radius:12px; padding:20px; cursor:pointer;
+  transition: all 0.2s; position:relative; overflow:hidden;
+}
+.card::before {
+  content:''; position:absolute; top:0; left:0; right:0; height:2px;
+  opacity:0; transition: opacity 0.2s;
+}
+.card:hover { border-color: var(--border2); transform:translateY(-2px); box-shadow:0 8px 24px rgba(0,0,0,0.3); }
+.card:hover::before { opacity:1; }
+.card-tag {
+  display:inline-flex; align-items:center; gap:5px;
+  font-size:10px; font-weight:600; letter-spacing:0.1em;
+  text-transform:uppercase; padding:3px 8px; border-radius:4px;
+  margin-bottom:12px; font-family: var(--mono);
+}
+.card-title { font-family: var(--display); font-size:15px; font-weight:700; color: var(--text); margin-bottom:8px; line-height:1.3; }
+.card-preview { font-size:12px; color: var(--muted); line-height:1.6; }
+.card-arrow { position:absolute; bottom:16px; right:16px; font-size:14px; color: var(--border2); transition: all 0.2s; }
+.card:hover .card-arrow { color: var(--accent2); transform: translate(2px,-2px); }
+
+/* ── MODAL ── */
+.modal-overlay {
+  display:none; position:fixed; inset:0; background:rgba(0,0,0,0.75);
+  z-index:100; align-items:center; justify-content:center; padding:24px;
+  backdrop-filter: blur(4px);
+}
+.modal-overlay.open { display:flex; }
+.modal {
+  background: var(--surface); border:1px solid var(--border2);
+  border-radius:16px; width:100%; max-width:680px; max-height:85vh;
+  overflow-y:auto; position:relative; animation: modalIn 0.2s ease;
+}
+.modal::-webkit-scrollbar { width:4px; }
+.modal::-webkit-scrollbar-thumb { background: var(--border2); border-radius:2px; }
+@keyframes modalIn { from { opacity:0; transform:scale(0.97) translateY(8px); } to { opacity:1; transform:none; } }
+
+.modal-header { padding:24px 24px 0; position:sticky; top:0; background: var(--surface); z-index:1; padding-bottom:16px; border-bottom:1px solid var(--border); }
+.modal-close {
+  position:absolute; top:16px; right:16px; width:28px; height:28px;
+  background: var(--surface2); border:1px solid var(--border); border-radius:6px;
+  cursor:pointer; color: var(--muted); font-size:14px;
+  display:flex; align-items:center; justify-content:center; transition: all 0.15s;
+}
+.modal-close:hover { color: var(--text); border-color: var(--border2); }
+.modal-body { padding:20px 24px 24px; }
+
+/* ── NOTE CONTENT STYLES ── */
+.note-section { margin-bottom:20px; }
+.note-section-title {
+  font-size:11px; font-weight:600; letter-spacing:0.1em; text-transform:uppercase;
+  color: var(--muted); font-family: var(--mono); margin-bottom:10px;
+  padding-bottom:6px; border-bottom:1px solid var(--border);
+}
+.concept-block {
+  background: var(--surface2); border:1px solid var(--border);
+  border-radius:8px; padding:12px 14px; margin-bottom:8px; font-size:13px;
+  line-height:1.65; position:relative;
+}
+.concept-block.warn { border-left:3px solid var(--amber); }
+.concept-block.good { border-left:3px solid var(--green); }
+.concept-block.info { border-left:3px solid var(--accent); }
+.concept-block.danger { border-left:3px solid var(--red); }
+.code-block {
+  background: #0d0d14; border:1px solid var(--border);
+  border-radius:8px; padding:14px 16px; font-family: var(--mono);
+  font-size:12px; line-height:1.8; color: #c8c8f0; margin-bottom:8px;
+  overflow-x:auto; white-space:pre;
+}
+.code-block .kw { color: var(--accent2); }
+.code-block .fn { color: var(--teal); }
+.code-block .cm { color: var(--muted); }
+.code-block .st { color: var(--green); }
+.code-block .nm { color: var(--amber); }
+.inline-code {
+  font-family: var(--mono); font-size:12px; background: var(--surface2);
+  border:1px solid var(--border); padding:1px 5px; border-radius:4px; color: var(--accent2);
+}
+.note-text { font-size:13px; color: #b0b0cc; line-height:1.7; margin-bottom:10px; }
+.note-text strong { color: var(--text); font-weight:500; }
+.tag-row { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px; }
+.badge {
+  font-size:10px; font-family: var(--mono); padding:3px 8px;
+  border-radius:4px; font-weight:500; letter-spacing:0.05em;
+}
+
+/* ── EMPTY ── */
+.empty-state { text-align:center; padding:60px 20px; color: var(--muted); }
+.empty-icon { font-size:36px; margin-bottom:12px; opacity:0.4; }
+.empty-text { font-family: var(--mono); font-size:13px; }
+
+/* ── CATEGORY COLORS ── */
+.c-langgraph  { --cat: #7c6ff7; } .c-memory { --cat: #2dd4bf; }
+.c-tools      { --cat: #fbbf24; } .c-architecture { --cat: #a78bfa; }
+.c-concepts   { --cat: #4ade80; } .c-infra { --cat: #94a3b8; }
+.c-multiagent { --cat: #f472b6; } .c-bugs { --cat: #f87171; }
+.c-prebuilt   { --cat: #fb923c; }
+
+.card[class*="c-"]::before { background: var(--cat); }
+.nav-dot[class*="c-"] { background: var(--cat); }
+.card-tag[class*="c-"] { background: rgba(var(--cat-rgb,124,111,247),0.12); color: var(--cat); }
+
+/* inline nav dot colors */
+.dot-langgraph  { background:#7c6ff7; } .dot-memory { background:#2dd4bf; }
+.dot-tools      { background:#fbbf24; } .dot-architecture { background:#a78bfa; }
+.dot-concepts   { background:#4ade80; } .dot-infra { background:#94a3b8; }
+.dot-multiagent { background:#f472b6; } .dot-bugs { background:#f87171; }
+.dot-prebuilt   { background:#fb923c; }
+
+.tag-langgraph  { background:rgba(124,111,247,0.15); color:#a78bfa; }
+.tag-memory     { background:rgba(45,212,191,0.15);  color:#2dd4bf; }
+.tag-tools      { background:rgba(251,191,36,0.15);  color:#fbbf24; }
+.tag-architecture { background:rgba(167,139,250,0.15); color:#a78bfa; }
+.tag-concepts   { background:rgba(74,222,128,0.15);  color:#4ade80; }
+.tag-infra      { background:rgba(148,163,184,0.15); color:#94a3b8; }
+.tag-multiagent { background:rgba(244,114,182,0.15); color:#f472b6; }
+.tag-bugs       { background:rgba(248,113,113,0.15); color:#f87171; }
+.tag-prebuilt   { background:rgba(251,146,60,0.15);  color:#fb923c; }
+
+/* ── RESPONSIVE ── */
+@media(max-width:768px) {
+  .sidebar { display:none; }
+  .main { padding:20px 16px; }
+  .cards-grid { grid-template-columns:1fr; }
+}
+</style>
+</head>
+<body>
+<div class="app">
+
+<!-- SIDEBAR -->
+<aside class="sidebar">
+  <div class="sidebar-header">
+    <div class="sidebar-logo">LangGraph</div>
+    <div class="sidebar-sub">Agentic AI Mastery Notes</div>
+  </div>
+  <div class="search-wrap">
+    <input class="search-input" id="sideSearch" placeholder="Search notes..." />
+  </div>
+  <div id="navSections"></div>
+  <div class="sidebar-footer">
+    <div class="total-badge">Total notes: <span class="total-num" id="totalCount">0</span></div>
+  </div>
+</aside>
+
+<!-- MAIN -->
+<main class="main">
+  <div class="page-header">
+    <h1 class="page-title">Agentic AI <span>Mastery</span></h1>
+    <p class="page-desc">LangGraph · LangChain · Tools · Multi-Agent · Memory · Infra</p>
+  </div>
+  <div class="cards-grid" id="cardsGrid"></div>
+  <div class="empty-state" id="emptyState" style="display:none;">
+    <div class="empty-icon">◈</div>
+    <div class="empty-text">No notes found.</div>
+  </div>
+</main>
+
+</div>
+
+<!-- MODAL -->
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal" id="modal">
+    <div class="modal-header" id="modalHeader"></div>
+    <div class="modal-body" id="modalBody"></div>
+  </div>
+</div>
+
+<script>
+const NOTES = [
+  // ── LANGGRAPH CORE ──────────────────────────────────────────────────────────
+  {
+    id:1, cat:"langgraph", title:"What is LangGraph?",
+    preview:"Graph-based framework for stateful, multi-step LLM apps. Nodes = functions, Edges = flow, State = shared data.",
+    body:`
+<div class="note-section">
+  <div class="note-section-title">Core Idea</div>
+  <p class="note-text">LangGraph models LLM apps as a <strong>directed graph</strong>. Every step is a node. Data flows through state. You get cycles, conditionals, and persistence for free.</p>
+  <div class="concept-block info"><strong>Node</strong> — a Python function. Reads state → does work → returns partial state update.</div>
+  <div class="concept-block info"><strong>Edge</strong> — connection between nodes. Fixed (always goes there) or Conditional (depends on state).</div>
+  <div class="concept-block info"><strong>State</strong> — TypedDict shared by all nodes. Every node reads from it, writes to it.</div>
+</div>
+<div class="note-section">
+  <div class="note-section-title">Minimal Example</div>
+  <div class="code-block"><span class="kw">from</span> langgraph.graph <span class="kw">import</span> StateGraph, START, END
+<span class="kw">from</span> typing <span class="kw">import</span> TypedDict
+
+<span class="kw">class</span> <span class="nm">State</span>(TypedDict):
+    messages: list
+
+builder = <span class="fn">StateGraph</span>(State)
+builder.<span class="fn">add_node</span>(<span class="st">"llm"</span>, llm_node)
+builder.<span class="fn">add_edge</span>(START, <span class="st">"llm"</span>)
+builder.<span class="fn">add_edge</span>(<span class="st">"llm"</span>, END)
+graph = builder.<span class="fn">compile</span>()</div>
+</div>
+<div class="note-section">
+  <div class="note-section-title">Key Imports</div>
+  <div class="code-block"><span class="kw">from</span> langgraph.graph <span class="kw">import</span> StateGraph, START, END
+<span class="kw">from</span> langgraph.types <span class="kw">import</span> Command
+<span class="kw">from</span> langgraph.prebuilt <span class="kw">import</span> ToolNode, InjectedState, tools_condition
+<span class="kw">from</span> langgraph.checkpoint.postgres.aio <span class="kw">import</span> AsyncPostgresSaver</div>
+</div>`
+  },
+  {
+    id:2, cat:"langgraph", title:"ChatState — spine of your graph",
+    preview:"TypedDict every node reads/writes. Spread **state first. messages uses add_messages reducer (appends not replaces).",
+    body:`
+<div class="note-section">
+  <div class="note-section-title">Rules</div>
+  <div class="concept-block warn"><strong>Always spread **state first</strong>, then override keys. If you put **state after your keys it overwrites them.</div>
+  <div class="concept-block info"><strong>messages</strong> uses <code class="inline-code">add_messages</code> reducer — it APPENDS not replaces. All other keys replace.</div>
+  <div class="concept-block good">Use <code class="inline-code">Optional[...]</code> or <code class="inline-code">NotRequired[...]</code> for fields not present at graph start.</div>
+</div>
+<div class="note-section">
+  <div class="note-section-title">Example State</div>
+  <div class="code-block"><span class="kw">from</span> typing <span class="kw">import</span> TypedDict, Optional, List, Annotated
+<span class="kw">from</span> langgraph.graph.message <span class="kw">import</span> add_messages
+
+<span class="kw">class</span> <span class="nm">ChatState</span>(TypedDict):
+    messages:      Annotated[list, add_messages]  <span class="cm"># appends</span>
+    user_input:    str
+    user_id:       str
+    session_id:    str
+    intent:        Optional[str]
+    selected_tools: Optional[List[str]]
+    sequential:    Optional[bool]
+    context:       Optional[str]
+    tool_output:   Optional[str]
+    department:    Optional[str]
+    access_level:  Optional[int]</div>
+</div>
+<div class="note-section">
+  <div class="note-section-title">Node Return Pattern</div>
+  <div class="code-block"><span class="cm"># ✅ CORRECT — spread state first</span>
+<span class="kw">return</span> {**state, <span class="st">"intent"</span>: <span class="st">"tool"</span>, <span class="st">"selected_tools"</span>: [<span class="st">"calculate"</span>]}
+
+<span class="cm"># ❌ WRONG — state overwrites your keys</span>
+<span class="kw">return</span> {<span class="st">"intent"</span>: <span class="st">"tool"</span>, **state}</div>
+</div>`
+  },
+  {
+    id:3, cat:"langgraph", title:"Conditional Edges & Routing",
+    preview:"Route to different nodes based on state. The router function reads state and returns a node name string.",
+    body:`
+<div class="note-section">
+  <div class="note-section-title">Pattern</div>
+  <div class="code-block"><span class="kw">def</span> <span class="fn">route_after_classifier</span>(state: ChatState) -> str:
+    intent = state.get(<span class="st">"intent"</span>)
+    selected = state.get(<span class="st">"selected_tools"</span>, [])
+
+    <span class="kw">if</span> intent == <span class="st">"tool"</span> <span class="kw">and</span> selected:   <span class="kw">return</span> <span class="st">"tool_node"</span>
+    <span class="kw">if</span> intent == <span class="st">"tool"</span>:               <span class="kw">return</span> <span class="st">"llm_with_tools"</span>
+    <span class="kw">if</span> intent == <span class="st">"factual"</span>:            <span class="kw">return</span> <span class="st">"rag_node"</span>
+    <span class="kw">if</span> intent == <span class="st">"doc_analysis"</span>:       <span class="kw">return</span> <span class="st">"document_analysis_node"</span>
+    <span class="kw">if</span> intent == <span class="st">"out_of_scope"</span>:       <span class="kw">return</span> <span class="st">"reject"</span>
+    <span class="kw">return</span> <span class="st">"llm_node"</span>
+
+builder.<span class="fn">add_conditional_edges</span>(<span class="st">"classifier"</span>, route_after_classifier)</div>
+</div>
+<div class="note-section">
+  <div class="note-section-title">tools_condition — prebuilt router</div>
+  <div class="concept-block info">LangGraph ships a prebuilt router: <code class="inline-code">tools_condition</code>. Checks if last AIMessage has tool_calls. Returns "tools" or END. Use with bind_tools pattern.</div>
+  <div class="code-block">builder.<span class="fn">add_conditional_edges</span>(<span class="st">"llm"</span>, tools_condition)
+<span class="cm"># → "tools" if tool_calls present, else END</span></div>
+</div>
+<div class="note-section">
+  <div class="note-section-title">Command — route from inside a node</div>
+  <div class="code-block"><span class="kw">from</span> langgraph.types <span class="kw">import</span> Command
+
+<span class="kw">def</span> <span class="fn">my_node</span>(state):
+    <span class="kw">return</span> <span class="fn">Command</span>(
+        update={<span class="st">"context"</span>: <span class="st">"result"</span>},
+        goto=<span class="st">"next_node"</span>   <span class="cm"># route from inside node</span>
+    )</div>
+</div>`
+  },
+  {
+    id:4, cat:"langgraph", title:"Checkpointer & Time Travel",
+    preview:"Saves full state at every node. Enables undo, branch, and replay. thread_id = session_id.",
+    body:`
+<div class="note-section">
+  <div class="note-section-title">Setup</div>
+  <div class="code-block"><span class="kw">from</span> langgraph.checkpoint.postgres.aio <span class="kw">import</span> AsyncPostgresSaver
+<span class="kw">from</span> psycopg_pool <span class="kw">import</span> AsyncConnectionPool
+
+pool = <span class="fn">AsyncConnectionPool</span>(conninfo=DATABASE_URL)
+checkpointer = <span class="fn">AsyncPostgresSaver</span>(pool)
+<span class="kw">await</span> checkpointer.<span class="fn">setup</span>()  <span class="cm"># creates tables</span>
+
+graph = builder.<span class="fn">compile</span>(checkpointer=checkpointer)
+config = {<span class="st">"configurable"</span>: {<span class="st">"thread_id"</span>: session_id}}
+<span class="kw">await</span> graph.<span class="fn">astream</span>(input, config=config)</div>
+</div>
+<div class="note-section">
+  <div class="note-section-title">Time Travel Use Cases</div>
+  <div class="concept-block good"><strong>Undo</strong> — rewind to checkpoint_N, re-run with new query. Bad response erased.</div>
+  <div class="concept-block good"><strong>Branch</strong> — copy checkpoint to new thread_id. Fork conversation at any past point.</div>
+  <div class="concept-block info"><strong>Replay</strong> — re-run exact state that caused a bug. Pass checkpoint_id in config.</div>
+  <div class="code-block"><span class="cm"># Resume from specific checkpoint</span>
+config = {<span class="st">"configurable"</span>: {
+    <span class="st">"thread_id"</span>: session_id,
+    <span class="st">"checkpoint_id"</span>: checkpoint_id  <span class="cm"># ← time travel</span>
+}}</div>
+</div>
+<div class="note-section">
+  <div class="note-section-title">List checkpoints</div>
+  <div class="code-block"><span class="kw">async for</span> cp_tuple <span class="kw">in</span> checkpointer.<span class="fn">alist</span>(config):
+    print(cp_tuple.checkpoint[<span class="st">"id"</span>], cp_tuple.metadata)</div>
+</div>`
+  },
+  {
+    id:5, cat:"langgraph", title:"Send API — dynamic parallel workers",
+    preview:"Dynamically spawn multiple worker nodes at runtime. Each gets own input. All write to shared Annotated list key.",
+    body:`
+<div class="note-section">
+  <div class="note-section-title">What it does</div>
+  <p class="note-text">Normal edges go to one node. <strong>Send API</strong> lets you go to the same node N times with N different inputs — all in parallel. Used for map-reduce patterns.</p>
+  <div class="concept-block info">Classic use case: orchestrator plans 5 report sections → Send each to a worker → workers write in parallel → combine at end.</div>
+</div>
+<div class="note-section">
+  <div class="note-section-title">Pattern</div>
+  <div class="code-block"><span class="kw">from</span> langgraph.types <span class="kw">import</span> Send
+
+<span class="kw">def</span> <span class="fn">orchestrator</span>(state: State):
+    sections = plan_sections(state[<span class="st">"topic"</span>])
+    <span class="cm"># Send each section to "worker" node in parallel</span>
+    <span class="kw">return</span> [<span class="fn">Send</span>(<span class="st">"worker"</span>, {<span class="st">"section"</span>: s}) <span class="kw">for</span> s <span class="kw">in</span> sections]
+
+<span class="kw">class</span> <span class="nm">State</span>(TypedDict):
+    completed_sections: Annotated[list, operator.add]  <span class="cm"># all workers write here</span></div>
+</div>`
+  },
+
+  // ── MEMORY ──────────────────────────────────────────────────────────────────
+  {
+    id:6, cat:"memory", title:"Rolling Summarization Pattern",
+    preview:"When messages > 10, summarize old ones, issue RemoveMessage AFTER success, inject summary as SystemMessage.",
+    body:`
+<div class="note-section">
+  <div class="note-section-title">Why needed</div>
+  <p class="note-text">Long history = expensive tokens + worse LLM attention. Solution: summarize old exchanges, keep last 5, inject summary as system context.</p>
+</div>
+<div class="note-section">
+  <div class="note-section-title">Flow</div>
+  <div class="code-block">check_message_length_node
+  <span class="cm"># counts AI messages</span>
+  <span class="cm"># returns need_summary: bool</span>
+    ↓ True
+summarize_conversation_node
+  <span class="cm"># 1. read state["messages"] directly</span>
+  <span class="cm"># 2. format as "User: ...\nAssistant: ..."</span>
+  <span class="cm"># 3. LLM generates summary</span>
+  <span class="cm"># 4. THEN issue RemoveMessage (not before)</span>
+    ↓
+llm_node
+  <span class="cm"># injects summary as SystemMessage</span></div>
+</div>
+<div class="note-section">
+  <div class="note-section-title">Critical Rules</div>
+  <div class="concept-block danger"><strong>RemoveMessage AFTER success.</strong> If you delete before summary and the LLM call fails, messages are gone forever.</div>
+  <div class="concept-block danger"><strong>Read state["messages"] directly.</strong> isinstance(m, HumanMessage) always False on dicts. Checkpointer gives objects — don't re-process them.</div>
+  <div class="concept-block info">Trigger: <code class="inline-code">len(messages) > 10</code>. Keep last: <code class="inline-code">EXCHANGES_TO_KEEP * 2</code> messages after summary.</div>
+</div>`
+  },
+  {
+    id:7, cat:"memory", title:"Short vs Long Term Memory",
+    preview:"Short-term: checkpointer per thread. Long-term: BaseStore across threads. Don't mix them up.",
+    body:`
+<div class="note-section">
+  <div class="note-section-title">Two types</div>
+  <div class="concept-block info"><strong>Short-term (checkpointer)</strong> — per conversation thread. State restored on next message. Use AsyncPostgresSaver. thread_id = session_id.</div>
+  <div class="concept-block info"><strong>Long-term (store)</strong> — cross-thread, cross-user. Persistent facts, preferences, user profiles. Use InMemoryStore or custom BaseStore. Inject via InjectedStore.</div>
+</div>
+<div class="note-section">
+  <div class="note-section-title">Setup both</div>
+  <div class="code-block">graph = builder.<span class="fn">compile</span>(
+    checkpointer=checkpointer,  <span class="cm"># short-term</span>
+    store=store,                <span class="cm"># long-term</span>
+)</div>
+</div>
+<div class="note-section">
+  <div class="note-section-title">pre_model_hook — trim before LLM sees messages</div>
+  <div class="concept-block info">In create_react_agent, use pre_model_hook to trim/summarize messages before they hit the LLM. Return llm_input_messages to control what LLM sees WITHOUT modifying stored state.</div>
+  <div class="code-block"><span class="kw">def</span> <span class="fn">trim_hook</span>(state):
+    <span class="kw">return</span> {<span class="st">"llm_input_messages"</span>: state[<span class="st">"messages"</span>][-10:]}</div>
+</div>`
+  },
+
+  // ── TOOLS ───────────────────────────────────────────────────────────────────
+  {
+    id:8, cat:"tools", title:"7 Tool Calling Patterns",
+    preview:"create_react_agent → bind_tools+ToolNode → InjectedState → Command → manual_tool_node → classifier → think+execute",
+    body:`
+<div class="note-section">
+  <div class="note-section-title">All Patterns</div>
+  <div class="concept-block"><strong>1. create_react_agent</strong> — 1 line. Zero control. Prototypes only.</div>
+  <div class="concept-block good"><strong>2. bind_tools + ToolNode</strong> — LangGraph standard. LLM picks via tool_calls. ToolNode executes in parallel. Best for tool-only agents.</div>
+  <div class="concept-block good"><strong>3. bind_tools + custom ToolNode</strong> — same as #2 but write executor yourself. Use for middleware/logging per tool.</div>
+  <div class="concept-block good"><strong>4. InjectedState + ToolNode ← expert preferred</strong> — tool receives user_id/session_id from state automatically. LLM never sees injected params.</div>
+  <div class="concept-block info"><strong>5. Command() return</strong> — tool updates state directly. Tool becomes graph citizen. Can also route to next node.</div>
+  <div class="concept-block info"><strong>6. Classifier-driven</strong> — YOU pick tool, not LLM. 0 extra LLM calls. Use for simple predictable tools.</div>
+  <div class="concept-block"><strong>7. think + execute nodes</strong> — LLM outputs JSON tool choice to state. Separate node executes. Fully inspectable, no bind_tools.</div>
+</div>
+<div class="note-section">
+  <div class="note-section-title">Which to use</div>
+  <div class="concept-block info">Simple tools (calculate, datetime, currency) → Pattern 6 (classifier, 0 extra LLM calls)<br/>Complex tools (github, email) → Pattern 4 (InjectedState + ToolNode)<br/>Both together → Hybrid</div>
+</div>`
+  },
+  {
+    id:9, cat:"tools", title:"InjectedState & InjectedStore",
+    preview:"Annotate tool params so ToolNode injects graph state/store automatically. LLM never sees these params.",
+    body:`
+<div class="note-section">
+  <div class="note-section-title">InjectedState</div>
+  <p class="note-text">Tool needs user_id but you don't want LLM generating it. Annotate with InjectedState — ToolNode injects it, LLM schema hides it.</p>
+  <div class="code-block"><span class="kw">from</span> langgraph.prebuilt <span class="kw">import</span> InjectedState
+<span class="kw">from</span> typing <span class="kw">import</span> Annotated
+
+<span class="nm">@tool</span>
+<span class="kw">def</span> <span class="fn">search_docs</span>(
+    query: str,
+    state: Annotated[ChatState, InjectedState]  <span class="cm"># ← hidden from LLM</span>
+) -> str:
+    user_id = state[<span class="st">"user_id"</span>]     <span class="cm"># just available</span>
+    dept    = state[<span class="st">"department"</span>]   <span class="cm"># no manual passing</span>
+    ...</div>
+</div>
+<div class="note-section">
+  <div class="note-section-title">InjectedStore</div>
+  <div class="code-block"><span class="kw">from</span> langgraph.prebuilt <span class="kw">import</span> InjectedStore
+<span class="kw">from</span> langgraph.store.base <span class="kw">import</span> BaseStore
+
+<span class="nm">@tool</span>
+<span class="kw">def</span> <span class="fn">remember_fact</span>(
+    fact: str,
+    store: Annotated[BaseStore, InjectedStore]  <span class="cm"># long-term memory</span>
+) -> str:
+    store.<span class="fn">put</span>((<span class="st">"facts"</span>,), key, {<span class="st">"fact"</span>: fact})</div>
+</div>
+<div class="note-section">
+  <div class="note-section-title">ToolRuntime — bundle everything</div>
+  <div class="concept-block info">ToolRuntime is a dataclass that bundles state + store + config together. Inject as one param instead of three separate annotations.</div>
+  <div class="concept-block warn">Known issue: prebuilt ToolNode ignores tools using InjectedState + Command() together. Use custom ToolNode in that case.</div>
+</div>`
+  },
+  {
+    id:10, cat:"tools", title:"Command() — tools that update state",
+    preview:"Return Command(update={...}) to write to state directly from a tool. Can also route to next node via goto.",
+    body:`
+<div class="note-section">
+  <div class="note-section-title">Basic usage</div>
+  <div class="code-block"><span class="kw">from</span> langgraph.types <span class="kw">import</span> Command
+
+<span class="nm">@tool</span>
+<span class="kw">def</span> <span class="fn">github_reader</span>(repo_url: str) -> Command:
+    content = <span class="fn">read_all_files</span>(repo_url)
+    <span class="kw">return</span> <span class="fn">Command</span>(update={
+        <span class="st">"tool_output"</span>:     content,
+        <span class="st">"context"</span>:         content,
+        <span class="st">"github_repo_url"</span>: repo_url,
+    })</div>
+</div>
+<div class="note-section">
+  <div class="note-section-title">Route from tool</div>
+  <div class="code-block"><span class="cm"># Tool decides next node</span>
+<span class="kw">return</span> <span class="fn">Command</span>(update={...}, goto=<span class="st">"analysis_node"</span>)
+
+<span class="cm"># In subgraph — go to parent node</span>
+<span class="kw">return</span> <span class="fn">Command</span>(update={...}, goto=Command.PARENT)</div>
+</div>
+<div class="note-section">
+  <div class="note-section-title">Handle in custom ToolNode</div>
+  <div class="code-block">result = tool_fn.<span class="fn">invoke</span>(args)
+<span class="kw">if</span> <span class="fn">isinstance</span>(result, Command):
+    <span class="kw">return</span> {**state, **result.update}   <span class="cm"># apply state updates</span>
+<span class="kw">return</span> {**state, <span class="st">"tool_output"</span>: <span class="fn">str</span>(result)}</div>
+</div>`
+  },
+  {
+    id:11, cat:"tools", title:"ValidationNode",
+    preview:"Validates tool call schemas WITHOUT executing. Good for extraction flows where you need structured output verified.",
+    body:`
+<div class="note-section">
+  <div class="note-section-title">What it does</div>
+  <p class="note-text">When you want to extract structured data using tool schemas but NOT actually run the tool. ValidationNode checks that tool call args match the schema.</p>
+  <div class="concept-block info">Use for: extraction pipelines, form filling, structured output without side effects.</div>
+</div>
+<div class="note-section">
+  <div class="note-section-title">Usage</div>
+  <div class="code-block"><span class="kw">from</span> langgraph.prebuilt <span class="kw">import</span> ValidationNode
+
+validation = <span class="fn">ValidationNode</span>([my_schema_tool])
+builder.<span class="fn">add_node</span>(<span class="st">"validate"</span>, validation)
+
+<span class="cm"># Flow: llm → validate → (valid) → done</span>
+<span class="cm">#                      → (invalid) → llm again</span></div>
+</div>
+<div class="note-section">
+  <div class="note-section-title">vs ToolNode</div>
+  <div class="concept-block"><strong>ToolNode</strong> — executes the tool, returns result as ToolMessage.<br/><strong>ValidationNode</strong> — validates args schema only, no execution. Preserves original messages + tool IDs for multi-turn conversations.</div>
+</div>`
+  },
+  {
+    id:12, cat:"tools", title:"Modular Tools Folder Structure",
+    preview:"Each tool is a self-contained package. _ prefix = private. Central __init__.py = one line per tool.",
+    body:`
+<div class="note-section">
+  <div class="note-section-title">Structure</div>
+  <div class="code-block">tools/
+  __init__.py          <span class="cm"># ALL_TOOLS, TOOL_MAP — 1 import per tool</span>
+  web_search/
+    __init__.py        <span class="cm"># exports: web_search only</span>
+    tool.py            <span class="cm"># @tool interface</span>
+    providers.py       <span class="cm"># tavily + duckduckgo (private)</span>
+  github/
+    __init__.py        <span class="cm"># exports: github_reader only</span>
+    tool.py            <span class="cm"># LLM sees this</span>
+    _api.py            <span class="cm"># GitHub REST (private, _ prefix)</span>
+    _recursive.py      <span class="cm"># recursive reader (private)</span>
+  calculator/
+    __init__.py
+    tool.py            <span class="cm"># safe AST eval, no eval()</span></div>
+</div>
+<div class="note-section">
+  <div class="note-section-title">Rules</div>
+  <div class="concept-block good"><code class="inline-code">_</code> prefix = private helper. Never exported. LLM never sees it.</div>
+  <div class="concept-block good"><strong>Adding a tool:</strong> create package → export from its __init__.py → add ONE import to central __init__.py. Done.</div>
+  <div class="concept-block warn"><strong>Don't @tool instance methods</strong> — breaks due to self binding. Wrap in a closure instead.</div>
+</div>`
+  },
+  {
+    id:13, cat:"tools", title:"Parallel & Sequential Tool Execution",
+    preview:"Classifier returns selected_tools + sequential flag. Parallel = asyncio.gather. Sequential = loop with prev result passed forward.",
+    body:`
+<div class="note-section">
+  <div class="note-section-title">Classifier output</div>
+  <div class="code-block">{
+  <span class="st">"intent"</span>:         <span class="st">"tool"</span>,
+  <span class="st">"selected_tools"</span>: [<span class="st">"web_search"</span>, <span class="st">"convert_currency"</span>],
+  <span class="st">"sequential"</span>:     <span class="kw">true</span>,  <span class="cm"># tool2 needs output of tool1</span>
+  <span class="st">"reasoning"</span>:      <span class="st">"needs price then convert"</span>
+}</div>
+</div>
+<div class="note-section">
+  <div class="note-section-title">Execution in tool_node</div>
+  <div class="code-block"><span class="kw">if</span> sequential:
+    prev = <span class="st">""</span>
+    <span class="kw">for</span> tool_name <span class="kw">in</span> selected_tools:
+        args   = <span class="kw">await</span> <span class="fn">extract_args</span>(tool_name, query, prev)
+        result = <span class="kw">await</span> <span class="fn">execute</span>(tool_name, args)
+        prev   = result  <span class="cm"># feeds next tool</span>
+<span class="kw">else</span>:
+    results = <span class="kw">await</span> asyncio.<span class="fn">gather</span>(
+        *[<span class="fn">run_tool</span>(t) <span class="kw">for</span> t <span class="kw">in</span> selected_tools]
+    )</div>
+</div>`
+  },
+
+  // ── PREBUILT ────────────────────────────────────────────────────────────────
+  {
+    id:14, cat:"prebuilt", title:"create_react_agent",
+    preview:"Prebuilt ReAct agent. model + tools → full agent loop. Supports pre_model_hook, post_model_hook, response_format, interrupt.",
+    body:`
+<div class="note-section">
+  <div class="note-section-title">Full signature (key params)</div>
+  <div class="code-block"><span class="kw">from</span> langchain.agents <span class="kw">import</span> create_agent  <span class="cm"># moved in v1.0</span>
+
+agent = <span class="fn">create_react_agent</span>(
+    model=<span class="st">"anthropic:claude-sonnet-4-6"</span>,
+    tools=[web_search, calculate],
+    prompt=<span class="st">"You are a helpful assistant"</span>,
+    pre_model_hook=trim_hook,      <span class="cm"># run before LLM</span>
+    post_model_hook=guard_hook,    <span class="cm"># run after LLM</span>
+    response_format=MySchema,      <span class="cm"># structured output</span>
+    checkpointer=checkpointer,     <span class="cm"># memory</span>
+    store=store,                   <span class="cm"># long-term memory</span>
+    interrupt_before=[<span class="st">"tools"</span>],   <span class="cm"># HITL</span>
+    name=<span class="st">"my_agent"</span>,              <span class="cm"># for multi-agent</span>
+)</div>
+</div>
+<div class="note-section">
+  <div class="note-section-title">v1 vs v2</div>
+  <div class="concept-block info"><strong>v1:</strong> ToolNode processes one whole AIMessage (all tool_calls in parallel).<br/><strong>v2 (default):</strong> ToolNode processes one tool call at a time, distributed via Send API.</div>
+  <div class="concept-block warn">AgentState and create_react_agent moved to langchain.agents in LangGraph v1.0 (Oct 2025). Update imports.</div>
+</div>`
+  },
+  {
+    id:15, cat:"prebuilt", title:"ToolNode — prebuilt executor",
+    preview:"Pass list of tools. Reads tool_calls from last AIMessage. Runs in parallel. Handles InjectedState automatically.",
+    body:`
+<div class="note-section">
+  <div class="note-section-title">Usage</div>
+  <div class="code-block"><span class="kw">from</span> langgraph.prebuilt <span class="kw">import</span> ToolNode
+
+tool_node = <span class="fn">ToolNode</span>([web_search, calculate, github_reader])
+
+builder.<span class="fn">add_node</span>(<span class="st">"tools"</span>, tool_node)
+builder.<span class="fn">add_conditional_edges</span>(<span class="st">"llm"</span>, tools_condition)
+builder.<span class="fn">add_edge</span>(<span class="st">"tools"</span>, <span class="st">"llm"</span>)</div>
+</div>
+<div class="note-section">
+  <div class="note-section-title">Input formats ToolNode accepts</div>
+  <div class="concept-block info">1. Dict with "messages" key (last = AIMessage with tool_calls)<br/>2. List of messages directly<br/>3. List of tool call dicts</div>
+</div>
+<div class="note-section">
+  <div class="note-section-title">Limitation</div>
+  <div class="concept-block danger">Prebuilt ToolNode ignores tools that use InjectedState AND return Command() together. Use custom ToolNode for those cases.</div>
+</div>`
+  },
+
+  // ── ARCHITECTURE ────────────────────────────────────────────────────────────
+  {
+    id:16, cat:"architecture", title:"Full Graph Flow — Our App",
+    preview:"check_length → summarize? → guardrails → classifier → route → [rag/tool/doc/llm] → persist",
+    body:`
+<div class="note-section">
+  <div class="note-section-title">Complete flow</div>
+  <div class="code-block">START
+  → check_message_length
+      ↓ need_summary=True
+  → summarize_conversation → llm_node
+      ↓ need_summary=False
+  → input_guardrails
+  → classifier
+      ↓ route_after_classifier
+      ├── factual        → rag_node → llm_node
+      ├── doc_analysis   → document_analysis_node → llm_node
+      ├── summary        → summarize_document_node → llm_node
+      ├── tool (known)   → tool_node → llm_node
+      ├── tool (complex) → llm_with_tools
+      │     ↓ has tool_calls?
+      │     → manual_tool_node → llm_node
+      ├── conversation   → llm_node
+      └── out_of_scope   → reject
+  → persist_message (Celery bg)
+END</div>
+</div>`
+  },
+  {
+    id:17, cat:"architecture", title:"Hybrid Tool Routing",
+    preview:"Simple tools → classifier picks (0 extra LLM calls). Complex tools → LLM picks via bind_tools (flexible).",
+    body:`
+<div class="note-section">
+  <div class="note-section-title">Which tools go where</div>
+  <div class="concept-block good"><strong>Classifier picks (Pattern 6):</strong> calculate, get_datetime, convert_currency, web_search, weather, fetch_url — args always obvious from query, 0 extra LLM call.</div>
+  <div class="concept-block info"><strong>LLM picks (Pattern 4):</strong> github_reader, send_email — args need reasoning. LLM sees bind_tools schema, picks + generates args.</div>
+</div>
+<div class="note-section">
+  <div class="note-section-title">Router</div>
+  <div class="code-block"><span class="kw">def</span> <span class="fn">route_after_classifier</span>(state):
+    selected = state.get(<span class="st">"selected_tools"</span>, [])
+    <span class="kw">if</span> intent == <span class="st">"tool"</span> <span class="kw">and</span> selected:
+        <span class="kw">return</span> <span class="st">"tool_node"</span>       <span class="cm"># fast path</span>
+    <span class="kw">if</span> intent == <span class="st">"tool"</span>:
+        <span class="kw">return</span> <span class="st">"llm_with_tools"</span>  <span class="cm"># LLM decides</span></div>
+</div>`
+  },
+  {
+    id:18, cat:"architecture", title:"SSE Streaming Pattern",
+    preview:"graph.astream with stream_mode=messages. Tag LLM chunks. yield to FastAPI SSE endpoint.",
+    body:`
+<div class="note-section">
+  <div class="note-section-title">Pattern</div>
+  <div class="code-block"><span class="cm"># FastAPI SSE endpoint</span>
+<span class="kw">async def</span> <span class="fn">stream_chat</span>(query: str, session_id: str):
+    config = {<span class="st">"configurable"</span>: {<span class="st">"thread_id"</span>: session_id}}
+    
+    <span class="kw">async for</span> event <span class="kw">in</span> graph.<span class="fn">astream</span>(
+        {<span class="st">"user_input"</span>: query},
+        config=config,
+        stream_mode=<span class="st">"messages"</span>
+    ):
+        msg, meta = event
+        <span class="kw">if</span> <span class="st">"llm_response"</span> <span class="kw">in</span> meta.get(<span class="st">"tags"</span>, []):
+            <span class="kw">yield</span> <span class="fn">json.dumps</span>({<span class="st">"chunk"</span>: msg.content})</div>
+</div>
+<div class="note-section">
+  <div class="note-section-title">Bugs Fixed</div>
+  <div class="concept-block danger"><code class="inline-code">yield {json...}</code> is a set literal. Must be <code class="inline-code">yield json.dumps({...})</code></div>
+  <div class="concept-block warn">Frontend: parse <code class="inline-code">event.type === "session"</code> — don't check raw string prefix, it misses JSON payloads.</div>
+  <div class="concept-block info">Tag inner astream: <code class="inline-code">config={"tags": ["llm_response"]}</code> marks final LLM chunks vs internal node traffic.</div>
+</div>`
+  },
+
+  // ── MULTI-AGENT ─────────────────────────────────────────────────────────────
+  {
+    id:19, cat:"multiagent", title:"Multi-Agent Architectures",
+    preview:"Network (peer-to-peer) → Supervisor (LLM router) → Swarm (dynamic handoff) → Hierarchical (nested supervisors)",
+    body:`
+<div class="note-section">
+  <div class="note-section-title">4 Architectures</div>
+  <div class="concept-block"><strong>1. Network</strong> — agents communicate freely. No central control. Simple but unpredictable.</div>
+  <div class="concept-block info"><strong>2. Supervisor</strong> — one LLM supervisor decides which agent runs next. Uses Command to route. Predictable, good for well-defined subtasks.</div>
+  <div class="concept-block good"><strong>3. Swarm</strong> — agents hand off to each other dynamically via handoff tools. active_agent tracked in state. Flexible for fluid task boundaries.</div>
+  <div class="concept-block info"><strong>4. Hierarchical</strong> — supervisors with sub-supervisors. Top-level supervisor → team supervisors → workers. For very complex systems.</div>
+</div>
+<div class="note-section">
+  <div class="note-section-title">Supervisor pattern</div>
+  <div class="code-block"><span class="kw">def</span> <span class="fn">supervisor_node</span>(state) -> Command:
+    decision = llm.<span class="fn">invoke</span>(supervisor_prompt)
+    <span class="cm"># "next": "researcher" | "writer" | "FINISH"</span>
+    <span class="kw">return</span> <span class="fn">Command</span>(goto=decision.next)</div>
+</div>`
+  },
+  {
+    id:20, cat:"multiagent", title:"Swarm — Dynamic Agent Handoff",
+    preview:"create_swarm([alice, bob]). Agents hand off via Command. active_agent in shared state. Needs checkpointer.",
+    body:`
+<div class="note-section">
+  <div class="note-section-title">Setup</div>
+  <div class="code-block"><span class="kw">from</span> langgraph_swarm <span class="kw">import</span> create_swarm, create_handoff_tool
+
+alice = <span class="fn">create_react_agent</span>(
+    model, tools=[add, <span class="fn">create_handoff_tool</span>(<span class="st">"Bob"</span>)],
+    system_prompt=<span class="st">"You are Alice, an addition expert."</span>,
+    name=<span class="st">"Alice"</span>,
+)
+bob = <span class="fn">create_react_agent</span>(
+    model, tools=[<span class="fn">create_handoff_tool</span>(<span class="st">"Alice"</span>)],
+    system_prompt=<span class="st">"You are Bob."</span>,
+    name=<span class="st">"Bob"</span>,
+)
+
+workflow = <span class="fn">create_swarm</span>([alice, bob], default_active_agent=<span class="st">"Alice"</span>)
+app = workflow.<span class="fn">compile</span>(checkpointer=checkpointer)</div>
+</div>
+<div class="note-section">
+  <div class="note-section-title">Key rules</div>
+  <div class="concept-block warn"><strong>Always compile with checkpointer</strong> — swarm forgets active_agent between turns without it.</div>
+  <div class="concept-block info">Handoff tools return Command — they update active_agent and transfer context to next agent.</div>
+  <div class="concept-block info">By default all agents share one messages list. Use custom state schema for private message histories.</div>
+</div>`
+  },
+  {
+    id:21, cat:"multiagent", title:"Subgraphs",
+    preview:"Wrap a full graph as a node in a parent graph. Each subgraph can have its own state schema. Communicate via shared keys.",
+    body:`
+<div class="note-section">
+  <div class="note-section-title">When to use</div>
+  <p class="note-text">Complex subsets of logic (like a full research team) can be wrapped as a subgraph node. Reusable, testable independently.</p>
+</div>
+<div class="note-section">
+  <div class="note-section-title">Pattern</div>
+  <div class="code-block"><span class="cm"># Build subgraph</span>
+sub_builder = <span class="fn">StateGraph</span>(SubState)
+sub_builder.<span class="fn">add_node</span>(<span class="st">"worker"</span>, worker_node)
+subgraph = sub_builder.<span class="fn">compile</span>()
+
+<span class="cm"># Add as node in parent</span>
+parent_builder.<span class="fn">add_node</span>(<span class="st">"research_team"</span>, subgraph)</div>
+</div>
+<div class="note-section">
+  <div class="note-section-title">State communication</div>
+  <div class="concept-block info">Subgraph and parent share state via <strong>overlapping key names</strong>. Keys with same name are automatically passed in/out.</div>
+  <div class="concept-block info">For completely private subgraph state: define input/output transformation functions to map between parent and subgraph state.</div>
+  <div class="concept-block warn">Command(goto=...) from subgraph to parent: use <code class="inline-code">Command(goto=Command.PARENT, update={...})</code></div>
+</div>`
+  },
+
+  // ── CONCEPTS ────────────────────────────────────────────────────────────────
+  {
+    id:22, cat:"concepts", title:"RAG — Retrieval Augmented Generation",
+    preview:"Embed query → pgvector similarity search → inject top-K chunks into LLM prompt → LLM answers with context.",
+    body:`
+<div class="note-section">
+  <div class="note-section-title">Why</div>
+  <p class="note-text">LLM doesn't know your documents. RAG gives it access: search first, then answer using retrieved content.</p>
+</div>
+<div class="note-section">
+  <div class="note-section-title">Flow</div>
+  <div class="code-block">user query
+  → embed query (convert to vector)
+  → pgvector: SELECT ... ORDER BY embedding <-> query_vec LIMIT 5
+  → retrieve top-K relevant chunks
+  → inject AFTER message history, BEFORE query  ← attention position
+  → LLM answers using that context</div>
+</div>
+<div class="note-section">
+  <div class="note-section-title">Context injection position</div>
+  <div class="concept-block info">Inject RAG context AFTER history but just BEFORE the query. LLM pays most attention to content near the end of the prompt (recency bias).</div>
+  <div class="concept-block info"><strong>factual intent</strong> → rag_node (specific fact retrieval)<br/><strong>doc_analysis</strong> → document_analysis_node (full doc reasoning)</div>
+</div>`
+  },
+  {
+    id:23, cat:"concepts", title:"ReAct Pattern",
+    preview:"Reason + Act loop. LLM thinks what tool to use → uses it → sees result → thinks again → until done.",
+    body:`
+<div class="note-section">
+  <div class="note-section-title">Loop</div>
+  <div class="code-block">LLM: <span class="st">"I need iPhone price"</span>
+  → <span class="fn">web_search</span>(<span class="st">"iPhone 16 price"</span>)  → <span class="st">"$999"</span>
+LLM: <span class="st">"now convert to INR"</span>
+  → <span class="fn">convert_currency</span>(999, USD, INR) → <span class="st">"₹83,916"</span>
+LLM: <span class="st">"I have all I need"</span>
+  → final response (no tool_calls)</div>
+</div>
+<div class="note-section">
+  <div class="note-section-title">Termination</div>
+  <div class="concept-block info">Loop stops when LLM generates AIMessage with no tool_calls. tools_condition routes to END.</div>
+  <div class="concept-block warn">Always set recursion_limit (default 25). remaining_steps in AgentState tracks this automatically in create_react_agent.</div>
+</div>
+<div class="note-section">
+  <div class="note-section-title">In LangGraph</div>
+  <div class="code-block"><span class="cm"># Conditional edge creates the loop</span>
+builder.<span class="fn">add_conditional_edges</span>(<span class="st">"llm"</span>, tools_condition)
+builder.<span class="fn">add_edge</span>(<span class="st">"tools"</span>, <span class="st">"llm"</span>)  <span class="cm"># loop back</span></div>
+</div>`
+  },
+  {
+    id:24, cat:"concepts", title:"interrupt() — Human in the Loop",
+    preview:"Pause graph at any point, wait for human input, resume. Requires checkpointer. Not in try/catch.",
+    body:`
+<div class="note-section">
+  <div class="note-section-title">How it works</div>
+  <div class="concept-block info">Calling <code class="inline-code">interrupt()</code> raises a special exception that LangGraph catches. State is saved. Graph waits. You resume by calling graph.invoke again with <code class="inline-code">Command(resume=user_input)</code>.</div>
+</div>
+<div class="note-section">
+  <div class="note-section-title">Usage</div>
+  <div class="code-block"><span class="kw">from</span> langgraph.types <span class="kw">import</span> interrupt, Command
+
+<span class="kw">def</span> <span class="fn">approval_node</span>(state):
+    approved = <span class="fn">interrupt</span>(<span class="st">"Do you approve this action?"</span>)
+    <span class="kw">return</span> {<span class="st">"approved"</span>: approved}
+
+<span class="cm"># Resume</span>
+graph.<span class="fn">invoke</span>(<span class="fn">Command</span>(resume=<span class="kw">True</span>), config=config)</div>
+</div>
+<div class="note-section">
+  <div class="note-section-title">Rules</div>
+  <div class="concept-block danger"><strong>Never wrap interrupt() in try/catch</strong> — you'll catch the special exception and interrupt won't propagate correctly.</div>
+  <div class="concept-block warn">Multiple interrupts in one node: order matters. LangGraph matches resume values by index. Keep interrupt call order consistent.</div>
+  <div class="concept-block info">Static breakpoints: <code class="inline-code">compile(interrupt_before=["tools"])</code> for always-pause before a node. Dynamic: <code class="inline-code">interrupt()</code> inside node logic.</div>
+</div>`
+  },
+  {
+    id:25, cat:"concepts", title:"Structured Output from Agents",
+    preview:"response_format param in create_react_agent. Or with_structured_output on LLM. Makes a second LLM call.",
+    body:`
+<div class="note-section">
+  <div class="note-section-title">Approaches</div>
+  <div class="concept-block info"><strong>response_format in create_react_agent</strong> — automatic. After agent loop finishes, makes separate call to LLM to format output matching your schema.</div>
+  <div class="concept-block info"><strong>with_structured_output on LLM</strong> — LLM always returns structured. Good for classifier nodes.</div>
+  <div class="concept-block info"><strong>ValidationNode</strong> — validate tool call args conform to schema without running tool.</div>
+</div>
+<div class="note-section">
+  <div class="note-section-title">Usage</div>
+  <div class="code-block"><span class="kw">from</span> pydantic <span class="kw">import</span> BaseModel
+
+<span class="kw">class</span> <span class="nm">ClassifierOutput</span>(BaseModel):
+    intent: str
+    selected_tools: list[str]
+    sequential: bool
+
+<span class="cm"># Option 1 — LLM always structured</span>
+structured_llm = llm.<span class="fn">with_structured_output</span>(ClassifierOutput)
+
+<span class="cm"># Option 2 — agent final output structured</span>
+agent = <span class="fn">create_react_agent</span>(model, tools, response_format=ClassifierOutput)</div>
+</div>`
+  },
+
+  // ── INFRA ───────────────────────────────────────────────────────────────────
+  {
+    id:26, cat:"infra", title:"Celery — Background Tasks",
+    preview:"Offload slow work (persist messages, send email) to workers. Keep chat endpoint fast. Use sync session.",
+    body:`
+<div class="note-section">
+  <div class="note-section-title">Pattern</div>
+  <div class="code-block"><span class="cm"># Node — non-blocking</span>
+<span class="kw">def</span> <span class="fn">persist_message_node</span>(state):
+    persist_messages_task.<span class="fn">delay</span>(
+        state[<span class="st">"session_id"</span>], state[<span class="st">"user_id"</span>],
+        state[<span class="st">"user_input"</span>], response, summary
+    )
+    <span class="kw">return</span> state  <span class="cm"># returns immediately</span>
+
+<span class="cm"># Celery task</span>
+<span class="nm">@app.task</span>(bind=<span class="kw">True</span>, max_retries=3)
+<span class="kw">def</span> <span class="fn">persist_messages_task</span>(self, session_id, user_id, ...):
+    <span class="kw">try</span>:
+        <span class="cm"># sync session — not async in Celery</span>
+        <span class="kw">with</span> <span class="fn">sync_session_maker</span>() <span class="kw">as</span> db:
+            db.<span class="fn">add</span>(Message(...))
+    <span class="kw">except</span> Exception <span class="kw">as</span> e:
+        self.<span class="fn">retry</span>(exc=e, countdown=5)</div>
+</div>
+<div class="note-section">
+  <div class="note-section-title">Rules</div>
+  <div class="concept-block warn">Celery workers run in own process. Use <strong>sync</strong> SQLAlchemy session. Never asyncio.run() inside Celery tasks.</div>
+  <div class="concept-block good">bind=True gives access to self for retry. max_retries=3, countdown=5 (exponential optional).</div>
+</div>`
+  },
+  {
+    id:27, cat:"infra", title:"LangSmith — Observability",
+    preview:"Traces every LLM call, node execution, tool call. Set env vars to enable. Essential for debugging multi-agent.",
+    body:`
+<div class="note-section">
+  <div class="note-section-title">Setup</div>
+  <div class="code-block"><span class="cm"># .env</span>
+LANGCHAIN_TRACING_V2=<span class="st">true</span>
+LANGCHAIN_ENDPOINT=<span class="st">"https://api.smith.langchain.com"</span>
+LANGCHAIN_API_KEY=<span class="st">"your_key"</span>
+LANGCHAIN_PROJECT=<span class="st">"my_project"</span></div>
+</div>
+<div class="note-section">
+  <div class="note-section-title">What you get</div>
+  <div class="concept-block good">Full trace of every node execution, LLM input/output, tool calls, latency, token usage — per request.</div>
+  <div class="concept-block good">Replay traces to debug. Add feedback. Run evals against golden datasets.</div>
+  <div class="concept-block info">For multi-agent: traces show which sub-agent ran, what it saw, what it returned. Invaluable for debugging handoffs.</div>
+</div>`
+  },
+  {
+    id:28, cat:"infra", title:"AWS RDS + Async/Sync Sessions",
+    preview:"Async needs ssl=require. Sync needs sslmode=require. Never asyncio.run() in sync context. Celery = sync only.",
+    body:`
+<div class="note-section">
+  <div class="note-section-title">SQLAlchemy SSL setup</div>
+  <div class="code-block"><span class="cm"># Async (FastAPI, LangGraph nodes)</span>
+async_engine = <span class="fn">create_async_engine</span>(
+    ASYNC_DATABASE_URL,
+    connect_args={<span class="st">"ssl"</span>: <span class="st">"require"</span>}
+)
+
+<span class="cm"># Sync (Celery tasks)</span>
+sync_engine = <span class="fn">create_engine</span>(
+    SYNC_DATABASE_URL,
+    connect_args={<span class="st">"sslmode"</span>: <span class="st">"require"</span>}
+)</div>
+</div>
+<div class="note-section">
+  <div class="note-section-title">Rules</div>
+  <div class="concept-block danger">Never use asyncio.run() inside Celery — it creates a new event loop in a thread where one may already exist.</div>
+  <div class="concept-block info">ASYNC_DATABASE_URL uses <code class="inline-code">postgresql+asyncpg://</code>. SYNC uses <code class="inline-code">postgresql://</code>.</div>
+</div>`
+  },
+
+  // ── BUGS FIXED ──────────────────────────────────────────────────────────────
+  {
+    id:29, cat:"bugs", title:"Critical Bugs — Never Repeat",
+    preview:"isinstance on dicts, duplicate HumanMessage, RemoveMessage before summary, DDG fallback unreachable, **state position.",
+    body:`
+<div class="note-section">
+  <div class="note-section-title">Bug List</div>
+  <div class="concept-block danger"><strong>isinstance on dicts → always False.</strong> Read state["messages"] directly. Don't re-process message objects.</div>
+  <div class="concept-block danger"><strong>RemoveMessage before summary.</strong> If LLM fails, messages gone. Issue AFTER successful summary.</div>
+  <div class="concept-block danger"><strong>Duplicate HumanMessage.</strong> Only ONE node adds HumanMessage per turn. llm_node adds only AIMessage.</div>
+  <div class="concept-block danger"><strong>DuckDuckGo fallback unreachable.</strong> return inside except exits before fallback. Store error, let execution fall through.</div>
+  <div class="concept-block danger"><strong>**state overwrites keys.</strong> Always spread **state FIRST, then your overrides.</div>
+  <div class="concept-block warn"><strong>Wrong node name in routes.py.</strong> LangGraph fails silently. "summary_node" → "summarize_document_node".</div>
+  <div class="concept-block warn"><strong>yield set literal.</strong> yield {json...} creates a set. Use yield json.dumps({...}).</div>
+  <div class="concept-block warn"><strong>@tool on instance method.</strong> Wrap in closure instead — direct decoration breaks due to self binding.</div>
+</div>`
+  },
+];
+
+// ── CATEGORIES ──────────────────────────────────────────────────────────────
+const CATS = {
+  langgraph:    { label:"LangGraph Core", color:"#7c6ff7" },
+  memory:       { label:"Memory",         color:"#2dd4bf" },
+  tools:        { label:"Tools",          color:"#fbbf24" },
+  prebuilt:     { label:"Prebuilt",       color:"#fb923c" },
+  architecture: { label:"Architecture",  color:"#a78bfa" },
+  multiagent:   { label:"Multi-Agent",   color:"#f472b6" },
+  concepts:     { label:"Concepts",      color:"#4ade80" },
+  infra:        { label:"Infra",         color:"#94a3b8" },
+  bugs:         { label:"Bugs Fixed",    color:"#f87171" },
+};
+
+let activeFilter = "all";
+let searchQuery  = "";
+
+// ── NAV ─────────────────────────────────────────────────────────────────────
+function buildNav() {
+  const el = document.getElementById("navSections");
+  let html = `<div class="nav-section">
+    <div class="nav-section-title">Filter</div>
+    <div class="nav-item ${activeFilter==='all'?'active':''}" onclick="setFilter('all')">
+      <span class="nav-dot" style="background:#7070a0"></span>All notes
+      <span class="nav-count">${NOTES.length}</span>
+    </div>`;
+  Object.entries(CATS).forEach(([k,v]) => {
+    const count = NOTES.filter(n=>n.cat===k).length;
+    html += `<div class="nav-item ${activeFilter===k?'active':''}" onclick="setFilter('${k}')">
+      <span class="nav-dot" style="background:${v.color}"></span>${v.label}
+      <span class="nav-count">${count}</span>
+    </div>`;
+  });
+  html += `</div>`;
+  el.innerHTML = html;
+  document.getElementById("totalCount").textContent = NOTES.length;
+}
+
+function setFilter(f) { activeFilter=f; buildNav(); renderCards(); }
+
+// ── CARDS ────────────────────────────────────────────────────────────────────
+function renderCards() {
+  const grid  = document.getElementById("cardsGrid");
+  const empty = document.getElementById("emptyState");
+  const q     = searchQuery.toLowerCase();
+
+  const filtered = NOTES.filter(n => {
+    const matchCat  = activeFilter === "all" || n.cat === activeFilter;
+    const matchSearch = !q || n.title.toLowerCase().includes(q) || n.preview.toLowerCase().includes(q);
+    return matchCat && matchSearch;
+  });
+
+  if (!filtered.length) { grid.innerHTML=""; empty.style.display="block"; return; }
+  empty.style.display = "none";
+
+  grid.innerHTML = filtered.map(n => {
+    const cat = CATS[n.cat];
+    return `<div class="card" style="--cat:${cat.color}" onclick="openModal(${n.id})">
+      <div class="card::before" style="background:${cat.color}"></div>
+      <div class="card-tag tag-${n.cat}">${cat.label}</div>
+      <div class="card-title">${n.title}</div>
+      <div class="card-preview">${n.preview}</div>
+      <div class="card-arrow">↗</div>
+    </div>`;
+  }).join("");
+
+  // Apply top border via JS since ::before can't be set inline
+  document.querySelectorAll(".card").forEach(c => {
+    c.addEventListener("mouseenter", () => c.style.borderTopColor = c.style.getPropertyValue("--cat"));
+    c.addEventListener("mouseleave", () => c.style.borderTopColor = "");
+  });
+}
+
+// ── MODAL ────────────────────────────────────────────────────────────────────
+function openModal(id) {
+  const n   = NOTES.find(x => x.id === id);
+  const cat = CATS[n.cat];
+  document.getElementById("modalHeader").innerHTML = `
+    <button class="modal-close" onclick="closeModal()">✕</button>
+    <div class="tag-row"><span class="badge tag-${n.cat}">${cat.label}</span></div>
+    <div style="font-family:var(--display);font-size:20px;font-weight:700;color:var(--text);line-height:1.3">${n.title}</div>`;
+  document.getElementById("modalBody").innerHTML = n.body;
+  document.getElementById("modalOverlay").classList.add("open");
+}
+function closeModal() { document.getElementById("modalOverlay").classList.remove("open"); }
+
+document.getElementById("modalOverlay").addEventListener("click", e => {
+  if (e.target === document.getElementById("modalOverlay")) closeModal();
+});
+document.addEventListener("keydown", e => { if (e.key === "Escape") closeModal(); });
+
+// ── SEARCH ───────────────────────────────────────────────────────────────────
+document.getElementById("sideSearch").addEventListener("input", e => {
+  searchQuery = e.target.value; renderCards();
+});
+
+// ── INIT ─────────────────────────────────────────────────────────────────────
+buildNav();
+renderCards();
+</script>
+</body>
+</html>
