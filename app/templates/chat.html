@@ -348,6 +348,59 @@
   }
   .chat-placeholder .ph-icon { font-size: 36px; opacity: 0.25; }
   .chat-placeholder p { font-size: 13px; opacity: 0.45; }
+
+  /* ── Clarification widget ───────────────────────────────────────────────── */
+  .clarif-question {
+    font-size: 14px; color: var(--text);
+    margin-bottom: 10px; line-height: 1.6;
+  }
+
+  .clarif-options {
+    display: flex; flex-wrap: wrap; gap: 8px;
+    margin-bottom: 8px;
+  }
+
+  .clarif-option {
+    padding: 6px 14px; border-radius: 20px;
+    font-size: 13px; font-family: var(--font);
+    cursor: pointer;
+    background: var(--surface2);
+    border: 1px solid var(--accent);
+    color: var(--accent);
+    transition: background 0.15s, color 0.15s;
+  }
+  .clarif-option:hover { background: var(--accent-dim); color: #fff; }
+
+  .clarif-other {
+    border-color: var(--border);
+    color: var(--text-sub);
+  }
+  .clarif-other:hover { background: var(--surface2); color: var(--text); }
+
+  .clarif-freetext {
+    display: flex; gap: 8px; margin-top: 8px; align-items: center;
+  }
+
+  .clarif-input {
+    flex: 1;
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 8px; padding: 7px 12px;
+    font-size: 13px; font-family: var(--font);
+    color: var(--text); outline: none;
+    transition: border-color 0.15s;
+  }
+  .clarif-input:focus { border-color: var(--accent); }
+  .clarif-input::placeholder { color: var(--text-sub); }
+
+  .clarif-freetext button {
+    padding: 7px 16px;
+    background: var(--accent); border: none;
+    border-radius: 8px; color: #fff;
+    font-size: 13px; font-family: var(--font);
+    font-weight: 600; cursor: pointer;
+    transition: background 0.15s; white-space: nowrap;
+  }
+  .clarif-freetext button:hover { background: #3b7ae8; }
 </style>
 
 <div class="shell">

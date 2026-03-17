@@ -64,3 +64,9 @@ class ChatState(TypedDict):
     debug_error :Optional[str]
 
     langgraph_node : Optional[str]
+
+    clarification_needed: bool
+    clarification_question: str
+    options: Optional[list[str]]   
+    user_clarification: Optional[str]
+

@@ -10,6 +10,7 @@ from app.auth.utility import get_current_active_user
 # from app.graph.builder import build_graph
 from app.graph.chatstate import ChatState
 from app.models.connection import get_db
+from langgraph.types import Command
 
 chat_router = APIRouter(prefix="/api/chat", tags=["Chat Routes"])
 templates = Jinja2Templates(directory="app/templates")
@@ -37,6 +38,7 @@ async def stream_chat(
     message: str = Form(...),
     session_id: Optional[str] = Form(None),
     active_documents: Optional[str] = Form(None),
+    is_clarification: bool = Form(False),
     db=Depends(get_db),
 ):
     session_id = session_id or "test"
@@ -49,21 +51,24 @@ async def stream_chat(
             parsed_active_documents = []
 
     print(f"Recently uploaded docs: {parsed_active_documents}")
+    if is_clarification:
+        initial_state = Command(resume=message)
+    else:
 
-    initial_state: ChatState = {
-        "user_input": message,
-        "user_id": user.id,
-        "role": user.role.value if user.role else "user",
-        "access_level": user.access_level,
-        "department": user.department,
-        "session_id": session_id,
-        "blocked": False,
-        "intent": None,
-        "context": None,
-        "retrieved_docs": [],
-        "final_response": None,
-        "active_documents": parsed_active_documents,
-    }
+        initial_state: ChatState = {
+            "user_input": message,
+            "user_id": user.id,
+            "role": user.role.value if user.role else "user",
+            "access_level": user.access_level,
+            "department": user.department,
+            "session_id": session_id,
+            "blocked": False,
+            "intent": None,
+            "context": None,
+            "retrieved_docs": [],
+            "final_response": None,
+            "active_documents": parsed_active_documents,
+        }
 
     async def event_generator():
         try:
@@ -86,6 +91,17 @@ async def stream_chat(
                         yield json.dumps({"type": "chunk","content": msg.content})
                 elif mode == "updates":
                     node_name = list(chunk.keys())[0]
+                    node_data = chunk[node_name]
+
+                    if "__interrupt__" in chunk:
+                        interrupt_data = chunk["__interrupt__"][0].value
+                        yield json.dumps({
+                            "type": "clarification",
+                            "question": interrupt_data["question"],
+                            "options": interrupt_data["options"],  
+                        })
+                        return 
+                    
                     yield json.dumps({"type": "progress", "node": node_name})
 
             yield json.dumps({"type": "end"})

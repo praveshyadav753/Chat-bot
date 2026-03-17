@@ -6,12 +6,12 @@ import re
 
 
 class Intent(str, Enum):
-    FACTUAL      = "factual"
+    FACTUAL = "factual"
     DOC_ANALYSIS = "doc_analysis"
-    COMPARISON   = "comparison"
+    COMPARISON = "comparison"
     CONVERSATION = "conversation"
-    SUMMARY      = "summary"
-    TOOL         = "tool"
+    SUMMARY = "summary"
+    TOOL = "tool"
     OUT_OF_SCOPE = "out_of_scope"
 
 
@@ -40,6 +40,11 @@ You are an intent classifier and document resolver for a RAG-based document assi
 - If ambiguous and no specific doc is mentioned → include ALL ready documents from session
 
 ## Classification Rules
+If the query is ambiguous and you cannot confidently classify it:
+- Set "needs_clarification": true
+- Write a short "clarification_question"  
+- Optionally set "clarification_options": ["opt1", "opt2"] if obvious choices exist
+- Leave options null if free-text reply is better
 
 ### Document intents (requires at least one resolved ready document):
 - `factual`      → Specific fact or detail from a document (e.g. "who signed?", "what is clause 5?")
@@ -71,11 +76,13 @@ Respond ONLY with a valid JSON object. No explanation, no markdown, no extra tex
 
 {{
   "intent": "<one of: {valid_labels}>",
-  "resolved_document_ids": ["<file_id>", ...],
+  "resolved_document_ids": [],
   "selected_tools": [],
   "sequential": false,
-  "reasoning": "<one short sentence>"
-}}
+  "needs_clarification": false,
+  "clarification_question": null,
+  "clarification_options": null,
+  "reasoning": "<one sentence>"
 
 ## User Query
 {query}
@@ -99,7 +106,9 @@ def _extract_json(text: str) -> dict:
     return json.loads(text.strip())
 
 
-def _build_ready_ids(session_documents: list[dict], active_docs: list[dict]) -> set[str]:
+def _build_ready_ids(
+    session_documents: list[dict], active_docs: list[dict]
+) -> set[str]:
     """Build set of all valid ready file_ids from both document pools."""
     all_docs = session_documents + active_docs
     return {
@@ -140,28 +149,29 @@ async def classify_and_resolve(
 
     response = await llm.ainvoke(prompt)
     raw = response.content.strip()
-
     try:
         parsed = _extract_json(raw)
 
-        label  = parsed.get("intent", "").strip().lower()
+        label = parsed.get("intent", "").strip().lower()
         intent = next(
             (i for i in Intent if i.value == label),
             Intent.CONVERSATION,
         )
 
-        ready_ids    = _build_ready_ids(session_documents, active_docs)
+        ready_ids = _build_ready_ids(session_documents, active_docs)
         resolved_ids = [
-            fid for fid in parsed.get("resolved_document_ids", [])
-            if fid in ready_ids
+            fid for fid in parsed.get("resolved_document_ids", []) if fid in ready_ids
         ]
 
-        # ── Tool selection 
+        # ── Tool selection
         # Only trust selected_tools when intent is actually tool
         # Validate each name against known simple tools — discard unknown names
         raw_tools = parsed.get("selected_tools", []) if intent == Intent.TOOL else []
         selected_tools = [t for t in raw_tools if t in _SIMPLE_TOOL_NAMES]
-        sequential     = bool(parsed.get("sequential", False))
+        sequential = bool(parsed.get("sequential", False))
+        needs_clarification = bool(parsed.get("needs_clarification", False))
+        clarification_question = parsed.get("clarification_question")
+        clarification_options = parsed.get("clarification_options")  # None or list
 
         print(
             f"[classifier] intent={intent.value} | "
@@ -170,7 +180,15 @@ async def classify_and_resolve(
             f"sequential={sequential} | "
             f"reason={parsed.get('reasoning')}"
         )
-        return intent, resolved_ids, selected_tools, sequential
+        return (
+            intent,
+            resolved_ids,
+            selected_tools,
+            sequential,
+            needs_clarification,
+            clarification_question,
+            clarification_options,
+        )
 
     except (json.JSONDecodeError, KeyError) as e:
         print(f"[classifier] Failed to parse LLM response: {e}\nRaw: {raw}")
@@ -181,25 +199,40 @@ async def classifier_node(state: ChatState) -> ChatState:
     print("[classifier_node] Running...")
 
     session_documents = state.get("session_documents", [])
-    active_docs       = state.get("active_documents", [])
+    active_docs = state.get("active_documents", [])
+    user_clarification = state.get("user_clarification")
+    query = state["user_input"]
+    if user_clarification:
+        query = f"{query}\n\nUser clarified: {user_clarification}"
 
     try:
-        intent, resolved_document_ids, selected_tools, sequential = await classify_and_resolve(
+        (
+            intent,
+            resolved_document_ids,
+            selected_tools,
+            sequential,
+            needs_clarification,
+            clarification_question,
+            clarification_options,
+        ) = await classify_and_resolve(
             query=state["user_input"],
             session_documents=session_documents,
             active_docs=active_docs,
         )
     except Exception as e:
         print(f"[classifier_node] Unexpected error: {e}. Defaulting to CONVERSATION.")
-        intent                = Intent.CONVERSATION
+        intent = Intent.CONVERSATION
         resolved_document_ids = []
-        selected_tools        = []
-        sequential            = False
+        selected_tools = []
+        sequential = False
 
     return {
         **state,
-        "intent":          intent.value,
-        "document_id":     resolved_document_ids,
-        "selected_tools":  selected_tools,
-        "sequential":      sequential,
+        "intent": intent.value,
+        "document_id": resolved_document_ids,
+        "selected_tools": selected_tools,
+        "sequential": sequential,
+        "needs_clarification": needs_clarification,
+        "clarification_question": clarification_question,
+        "clarification_options": clarification_options,
     }

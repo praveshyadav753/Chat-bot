@@ -1,10 +1,12 @@
 from celery import Celery
 # import app.REG.store.process 
+from app.core.config import settings
+
 
 celery_app = Celery(
     "chatbot",
-    broker="redis://localhost:6379/0",
-    backend="redis://localhost:6379/1",
+    broker=settings.CELERY_BROKER_URL,
+    backend=settings.CELERY_RESULT_BACKEND,
 )
 
 celery_app.conf.update(

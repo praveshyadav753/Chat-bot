@@ -1,13 +1,18 @@
 import json
 import redis.asyncio as redis
+from app.core.config import settings
 
 from fastapi import APIRouter
+# from app.redis_client import redis_client
 from sse_starlette.sse import EventSourceResponse
 
 router = APIRouter(prefix="/api", tags=["Events"])
 
-redis_client = redis.Redis(host="localhost", port=6379, decode_responses=True)
-
+redis_client = redis.from_url(
+    settings.REDIS_URL,
+    db=2,
+    decode_responses=True
+)
 
 @router.get("/document-status-stream")
 async def event_stream():

@@ -1,5 +1,3 @@
-// app/static/js/chat.js
-
 // ── Configure marked ──────────────────────────────────────────────────────────
 marked.setOptions({ gfm: true, breaks: true });
 
@@ -149,15 +147,11 @@ function hidePlaceholder() {
 }
 
 // ── Progress bubble ───────────────────────────────────────────────────────────
-// Returns the bubble element — steps and text divs are queried
-// RELATIVELY off this element, never by global ID.
-// This prevents multi-message bugs where querySelector finds
-// the wrong element from a previous message.
 function createProgressBubble() {
   hidePlaceholder();
   const row = document.createElement("div");
   row.className = "msg-row bot";
-  row.id = "thinking-row";  // only one thinking row exists at a time — safe
+  row.id = "thinking-row";
 
   const label = document.createElement("div");
   label.className = "role-label";
@@ -165,8 +159,6 @@ function createProgressBubble() {
 
   const bubble = document.createElement("div");
   bubble.className = "bubble bot progress-bubble";
-
-  // Use classes not IDs — multiple messages can coexist in DOM
   bubble.innerHTML = `
     <div class="thinking-dots">
       <span></span><span></span><span></span>
@@ -181,15 +173,13 @@ function createProgressBubble() {
   return bubble;
 }
 
-// Add a step — queries RELATIVE to bubble, not global DOM
 function addProgressStep(bubble, label) {
-  const steps = bubble.querySelector(".progress-steps");  // ← relative
-  const dots  = bubble.querySelector(".thinking-dots");   // ← relative
+  const steps = bubble.querySelector(".progress-steps");
+  const dots  = bubble.querySelector(".thinking-dots");
   if (!steps) return;
 
   if (dots) dots.style.display = "none";
 
-  // Mark previous step done
   const prev = steps.querySelector(".step.active");
   if (prev) {
     prev.classList.remove("active");
@@ -211,13 +201,11 @@ function addProgressStep(bubble, label) {
   chatBox.scrollTop = chatBox.scrollHeight;
 }
 
-// Convert progress bubble → response bubble, return textEl
 function convertToResponseBubble(bubble) {
   bubble.classList.remove("progress-bubble");
   bubble.classList.add("response-bubble");
 
-  // Mark last active step done
-  const lastStep = bubble.querySelector(".step.active");  // ← relative
+  const lastStep = bubble.querySelector(".step.active");
   if (lastStep) {
     lastStep.classList.remove("active");
     lastStep.classList.add("done");
@@ -228,10 +216,8 @@ function convertToResponseBubble(bubble) {
     lastStep.appendChild(tick);
   }
 
-  // Remove thinking dots
-  bubble.querySelector(".thinking-dots")?.remove();       // ← relative
+  bubble.querySelector(".thinking-dots")?.remove();
 
-  // Append text div after steps summary
   const textDiv = document.createElement("div");
   textDiv.className = "response-text";
   bubble.appendChild(textDiv);
@@ -292,6 +278,96 @@ function renderChunk(el, fullText, cursorEl) {
   chatBox.scrollTop = chatBox.scrollHeight;
 }
 
+// ── Clarification widget ──────────────────────────────────────────────────────
+function showClarificationWidget(question, options, sid) {
+  // remove thinking bubble — no response coming yet
+  document.getElementById("thinking-row")?.remove();
+  hidePlaceholder();
+
+  const row = document.createElement("div");
+  row.className = "msg-row bot";
+  row.id = "clarification-row";
+
+  const label = document.createElement("div");
+  label.className = "role-label";
+  label.textContent = "Assistant";
+
+  const bubble = document.createElement("div");
+  bubble.className = "bubble bot";
+
+  // ✅ options block — only rendered if LLM returned options
+  const optionsBlock = options?.length
+    ? `<div class="clarif-options">
+        ${options.map(opt =>
+          `<button class="clarif-option"
+            onclick="submitClarification(${JSON.stringify(opt)}, '${sid}')"
+          >${escapeHtml(opt)}</button>`
+        ).join("")}
+        <button class="clarif-option clarif-other"
+          onclick="document.getElementById('clarif-freetext-${sid}').style.display='flex'">
+          Other…
+        </button>
+       </div>`
+    : "";
+
+  // ✅ free text always present — hidden when options exist, visible when no options
+  bubble.innerHTML = `
+    <div class="clarif-question">${escapeHtml(question)}</div>
+    ${optionsBlock}
+    <div class="clarif-freetext" id="clarif-freetext-${sid}"
+      style="display:${options?.length ? 'none' : 'flex'}">
+      <input type="text" class="clarif-input" placeholder="Type your answer…"
+        onkeydown="if(event.key==='Enter') submitClarificationFromInput('${sid}')"/>
+      <button onclick="submitClarificationFromInput('${sid}')">Send</button>
+    </div>
+  `;
+
+  row.appendChild(label);
+  row.appendChild(bubble);
+  chatBox.appendChild(row);
+  chatBox.scrollTop = chatBox.scrollHeight;
+
+  // auto focus the input if no options
+  if (!options?.length) {
+    bubble.querySelector(".clarif-input")?.focus();
+  }
+}
+
+function submitClarificationFromInput(sid) {
+  // ✅ query relative to the specific freetext div, not global getElementById
+  const wrap  = document.getElementById(`clarif-freetext-${sid}`);
+  const input = wrap?.querySelector(".clarif-input");
+  const val   = input?.value.trim();
+  if (val) submitClarification(val, sid);
+}
+
+async function submitClarification(response, sid) {
+  document.getElementById("clarification-row")?.remove();
+  appendUserMessage(response, null);
+
+  isStreaming = true;
+  refreshSendBtn();
+
+  const fd = new FormData();
+  fd.append("message", response);
+  fd.append("session_id", sid);
+  fd.append("is_clarification", "true");  // ✅ same endpoint, flag to resume graph
+
+  try {
+    const res = await fetch("/api/chat/stream", {   // ✅ same endpoint
+      method: "POST", body: fd, credentials: "include",
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    await parseSSEStream(res);
+  } catch (err) {
+    console.error("[clarification] error:", err);
+  } finally {
+    isStreaming = false;
+    refreshSendBtn();
+    msgInput.focus();
+  }
+}
+
 // ── Send ──────────────────────────────────────────────────────────────────────
 async function sendMessage(e) {
   e.preventDefault();
@@ -317,6 +393,7 @@ async function sendMessage(e) {
   if (session_id) fd.append("session_id", session_id);
   if (active_documents.length)
     fd.append("active_documents", JSON.stringify(active_documents));
+  // ✅ is_clarification not set — defaults to False on backend
 
   try {
     const res = await fetch("/api/chat/stream", {
@@ -347,8 +424,9 @@ async function sendMessage(e) {
 const NODE_LABELS = {
   input_guardrails:        "Checking safety",
   summarize_conversation:  "Compacting conversation",
-  document_context:        "fetching session context",
-  classify:                "analyzing input",
+  document_context:        "Fetching session context",
+  classify:                "Analyzing input",
+  clarification_node:      "Asking for clarification",   // ✅ new
   rag_node:                "Searching documents",
   summarize_document_node: "Reading document",
   document_analysis_node:  "Analysing document",
@@ -392,27 +470,22 @@ async function parseSSEStream(response) {
       const raw = dataLine.replace(/^data:\s*/, "").trim();
       if (!raw) continue;
 
-      // ── Plain string events ───────────────────────────────────────────────
-      // Keep SESSION: support in case of legacy backend
       if (raw.startsWith("SESSION:")) {
         session_id = raw.replace("SESSION:", "").trim();
         sessionLabel.textContent = "session: " + session_id.slice(0, 8) + "…";
         continue;
       }
 
-      // ── JSON events ───────────────────────────────────────────────────────
       let event;
       try { event = JSON.parse(raw); }
       catch { console.warn("[SSE] unrecognised:", raw); continue; }
 
-      // {"type":"session","session_id":"..."}
       if (event.type === "session" && event.session_id) {
         session_id = event.session_id;
         sessionLabel.textContent = "session: " + session_id.slice(0, 8) + "…";
         continue;
       }
 
-      // {"type":"end"} or {"type":"error"}
       if (event.type === "end" || event.type === "error") {
         cursorEl.remove();
         if (event.type === "error") {
@@ -431,7 +504,6 @@ async function parseSSEStream(response) {
         return;
       }
 
-      // {"type":"progress","node":"rag_node"}
       if (event.type === "progress" && event.node) {
         if (!tokenStarted && !SKIP_NODES.has(event.node)) {
           const label = NODE_LABELS[event.node] || event.node.replace(/_/g, " ");
@@ -440,7 +512,13 @@ async function parseSSEStream(response) {
         continue;
       }
 
-      // {"type":"chunk","content":"..."} — LLM token
+      // ✅ clarification — show widget and stop parsing
+      if (event.type === "clarification") {
+        cursorEl.remove();
+        showClarificationWidget(event.question, event.options, session_id);
+        return;
+      }
+
       if (event.type === "chunk" && event.content) {
         if (!tokenStarted) {
           tokenStarted = true;

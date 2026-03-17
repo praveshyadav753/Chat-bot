@@ -20,6 +20,7 @@ from app.graph.nodes.llm_with_tool import llm_node_with_tools, complex_tool_node
 from app.graph.nodes.llm import llm_node
 from app.graph.nodes.reject import reject_node
 from app.graph.nodes.persist_message import persist_message_node
+from app.graph.nodes.clarification import clarification_node
 
 
 builder = StateGraph(ChatState)
@@ -39,6 +40,7 @@ builder.add_node("complex_tool_node", complex_tool_node)
 builder.add_node("llm_node", llm_node)
 builder.add_node("reject", reject_node)
 builder.add_node("persist_data", persist_message_node)
+builder.add_node("clarification_node", clarification_node)
 
 #  Edges 
 
@@ -81,6 +83,7 @@ builder.add_conditional_edges(
         "reject": "reject",
     },
 )
+builder.add_edge("clarification_node", "classify")
 
 # ── Simple tool path 
 builder.add_edge("tool_node", "llm_node")

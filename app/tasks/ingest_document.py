@@ -7,14 +7,14 @@ from app.REG.store.vec_store import store_documents
 from app.celery_app import celery_app
 from app.models.document import Document
 from typing import Optional
+from app.redis_client import redis_client
 
-import redis
 import json
 
 logger = get_task_logger(__name__)
 
 # Redis client for pub/sub
-redis_client = redis.Redis(host="localhost", port=6379, db=0)
+# redis_client = redis.Redis(host="localhost", port=6379, db=0)
 
 
 def publish_status(document_id: str, status: str, session_id: str):
