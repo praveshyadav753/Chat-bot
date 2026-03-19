@@ -8,6 +8,8 @@ from app.tasks.ingest_document import store_rag_doc
 from app.models.document import Document
 from app.models.connection import get_db
 from app.auth.utility import get_current_active_user
+from typing import Optional
+from fastapi import Form
 
 router = APIRouter(prefix="/api/documents", tags=["Documents"])
 
@@ -19,7 +21,7 @@ async def upload_document(
     documents: List[UploadFile] = File(...),
     user=Depends(get_current_active_user),
     db=Depends(get_db),
-    session_id : str ="abc"
+    session_id: Optional[str] = Form(None),
 ):
 
     os.makedirs(UPLOAD_DIR, exist_ok=True)

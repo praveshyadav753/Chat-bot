@@ -1,0 +1,60 @@
+{# ── sidebar.html ─────────────────────────────────────────────────────────────
+   Pure partial — no extends, no blocks.
+   Included in chat.html via:  {% include "sidebar.html" %}
+   Requires:  user  variable passed from the FastAPI route context.
+──────────────────────────────────────────────────────────────────────────── #}
+
+<aside class="sidebar" id="sidebar">
+
+  {# ── Header ────────────────────────────────────────────────────────────── #}
+  <div class="sidebar-header">
+    <div class="sidebar-brand">
+      <span class="sidebar-dot"></span>
+      <span class="sidebar-logo">Chatbot</span>
+    </div>
+    <button class="sidebar-collapse-btn" id="sidebar-collapse-btn"
+            title="Collapse sidebar" aria-label="Collapse sidebar">
+      <svg width="14" height="10" viewBox="0 0 14 10" fill="none">
+        <path d="M1 1h12M1 5h12M1 9h12"
+              stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+      </svg>
+    </button>
+  </div>
+
+  {# ── New chat button ───────────────────────────────────────────────────── #}
+  <div class="sidebar-actions">
+    <button class="new-chat-btn" id="new-chat-btn" aria-label="Start new chat">
+      <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+        <path d="M6 1v10M1 6h10"
+              stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+      </svg>
+      New Chat
+    </button>
+  </div>
+
+  {# ── Sessions list ─────────────────────────────────────────────────────── #}
+  <p class="sessions-label">Recent</p>
+
+  <div class="sessions-list" id="sessions-list" role="list">
+    <div class="sessions-empty" id="sessions-empty" aria-live="polite">
+      No sessions yet
+    </div>
+  </div>
+
+  {# ── Footer — user info + sign out ─────────────────────────────────────── #}
+  <div class="sidebar-footer">
+    <div class="sidebar-user">
+      <div class="sidebar-avatar" aria-hidden="true">
+        {{ user.username[0].upper() if user and user.username else "U" }}
+      </div>
+      <div class="sidebar-user-info">
+        <span class="sidebar-username">
+          {{ user.username if user else "User" }}
+        </span>
+        <a href="/logout" class="sidebar-logout">Sign out</a>
+      </div>
+    </div>
+    <div class="sessions-count" id="sessions-count">0 sessions</div>
+  </div>
+
+</aside>

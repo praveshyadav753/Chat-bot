@@ -19,16 +19,33 @@ async def get_checkpointer() -> AsyncPostgresSaver:
     """
     global _checkpointer, _pool
 
-    if _checkpointer is None:
-        _pool = AsyncConnectionPool(
-            conninfo=db_url,
-            max_size=20,        
-            open=False,        
-        )
-        await _pool.open()
+    if _checkpointer is not None:
+        return _checkpointer
 
-        _checkpointer = AsyncPostgresSaver(_pool)
-        await _checkpointer.setup()
+    setup_pool = AsyncConnectionPool(
+        conninfo=db_url,
+        kwargs={"autocommit": True},
+        min_size=1,
+        max_size=2,
+        open=False,
+    )
+    await setup_pool.open()
+    try:
+        setup_saver = AsyncPostgresSaver(setup_pool)
+        await setup_saver.setup()
+    finally:
+        await setup_pool.close()
+
+    pool = AsyncConnectionPool(
+        conninfo=db_url,
+        min_size=2,
+        max_size=10,
+        open=False,
+    )
+    await pool.open()
+    _pool = pool
+
+    _checkpointer = AsyncPostgresSaver(pool)
 
     return _checkpointer
 

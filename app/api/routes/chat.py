@@ -40,7 +40,8 @@ async def stream_chat(
     is_clarification: bool = Form(False),
     db=Depends(get_db),
 ):
-    session_id = session_id or "test"
+    session_id = session_id 
+    print(f"[chat] received message: {message!r} session_id={session_id} is_clarification={is_clarification}")
 
     parsed_active_documents = []
     if active_documents:

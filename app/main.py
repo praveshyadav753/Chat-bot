@@ -8,6 +8,7 @@ from fastapi.templating import Jinja2Templates
 
 from app.api.routes.auth import auth_route
 from app.api.routes.chat import chat_router
+from app.api.routes.sessions import sessions_router
 from app.auth.utility import get_current_user, get_token
 from app.graph.builder import build_graph
 from app.models import document, user
@@ -77,6 +78,7 @@ app.include_router(chat_router)
 app.include_router(auth_route)
 app.include_router(documents.router)
 app.include_router(update__event.router)
+app.include_router(sessions_router)
 
 
 @app.get("/")
