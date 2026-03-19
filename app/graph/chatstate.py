@@ -67,6 +67,7 @@ class ChatState(TypedDict):
 
     clarification_needed: bool
     clarification_question: str
-    options: Optional[list[str]]   
+    clarification_options: Optional[list[str]]   
     user_clarification: Optional[str]
+    clarification_history: list[dict]   
 

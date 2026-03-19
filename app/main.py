@@ -13,7 +13,7 @@ from app.graph.builder import build_graph
 from app.models import document, user
 from app.api.routes import documents, update__event
 from app.models.connection import engine, init_db, get_db
-from app.core.checkpointer import get_checkpointer
+from app.core.checkpointer import close_checkpointer, get_checkpointer
 
 async def warm_up_resources():
     import asyncio
@@ -46,6 +46,8 @@ async def lifespan(app: FastAPI):
     app.state.graph = await build_graph()
     yield
     await engine.dispose()
+    await close_checkpointer()
+
     print("App is shutting down...")
 
 

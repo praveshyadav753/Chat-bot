@@ -79,6 +79,7 @@ builder.add_conditional_edges(
         "document_analysis_node": "document_analysis_node",
         "tool_node": "tool_node",
         "llm_node_with_tools": "llm_node_with_tools",
+        "clarification_node": "clarification_node",
         "llm_node": "llm_node",
         "reject": "reject",
     },

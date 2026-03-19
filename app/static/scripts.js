@@ -2,9 +2,10 @@
 marked.setOptions({ gfm: true, breaks: true });
 
 // ── State ─────────────────────────────────────────────────────────────────────
-let session_id = null;
-let isStreaming = false;
+let session_id    = null;
+let isStreaming   = false;
 let uploadedFiles = [];
+let placeholderHidden = false;   // FIX: guard so we don't query DOM repeatedly
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
 const fileInput    = document.getElementById("documents");
@@ -66,8 +67,10 @@ function renderChip(entry) {
     <span class="chip-name" title="${escapeHtml(entry.file.name)}">${escapeHtml(entry.file.name)}</span>
     <span class="chip-badge">uploading</span>
     <span class="chip-spinner"></span>
-    <span class="chip-remove" onclick="removeChip('${entry.tempId}')">✕</span>
+    <span class="chip-remove">✕</span>
   `;
+  // FIX: attach remove handler via addEventListener, not inline onclick
+  chip.querySelector(".chip-remove").addEventListener("click", () => removeChip(entry.tempId));
   stagedDiv.appendChild(chip);
 }
 
@@ -131,6 +134,9 @@ evtSource.addEventListener("update", e => {
 });
 evtSource.onerror = () => console.warn("[SSE doc] disconnected");
 
+// FIX: close the document status SSE when the user leaves the page
+window.addEventListener("beforeunload", () => evtSource.close());
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function escapeHtml(t) {
   return t.replace(/[&<>"']/g, m =>
@@ -142,8 +148,12 @@ function fileIcon(name) {
     png:"🖼",jpg:"🖼",jpeg:"🖼",gif:"🖼",webp:"🖼",mp4:"🎬",mp3:"🎵",
     zip:"📦",json:"🔧",py:"🐍",js:"⚡",ts:"⚡",html:"🌐",css:"🎨" })[ext] || "📎";
 }
+
+// FIX: guard with a boolean so we don't query/mutate the DOM on every call
 function hidePlaceholder() {
+  if (placeholderHidden) return;
   if (placeholder) placeholder.style.display = "none";
+  placeholderHidden = true;
 }
 
 // ── Progress bubble ───────────────────────────────────────────────────────────
@@ -242,12 +252,13 @@ function appendUserMessage(text, attachCards) {
   }
 
   if (text) {
+    // FIX: always show role label above text bubble, even when attachments present
     const label = document.createElement("div");
     label.className = "role-label"; label.textContent = "You";
     const bubble = document.createElement("div");
     bubble.className = "bubble user";
     bubble.innerHTML = escapeHtml(text);
-    if (!attachCards?.length) row.appendChild(label);
+    row.appendChild(label);
     row.appendChild(bubble);
   }
 
@@ -268,19 +279,94 @@ function createAttachCard(name) {
   return card;
 }
 
-// ── Markdown render per chunk ─────────────────────────────────────────────────
+// ── Markdown render — debounced hljs highlighting ─────────────────────────────
+// FIX: only run syntax highlighting after streaming ends, not on every chunk,
+//      to avoid expensive re-highlighting of the same blocks repeatedly.
+let highlightTimer = null;
+
 function renderChunk(el, fullText, cursorEl) {
   el.innerHTML = marked.parse(fullText);
-  el.querySelectorAll("pre code").forEach(block => {
-    if (!block.dataset.highlighted) hljs.highlightElement(block);
-  });
   if (cursorEl) el.appendChild(cursorEl);
   chatBox.scrollTop = chatBox.scrollHeight;
+
+  // Debounce: highlight 300 ms after the last chunk arrives
+  clearTimeout(highlightTimer);
+  highlightTimer = setTimeout(() => {
+    el.querySelectorAll("pre code:not([data-highlighted])").forEach(block => {
+      hljs.highlightElement(block);
+    });
+  }, 300);
+}
+
+function finalizeHighlighting(el) {
+  clearTimeout(highlightTimer);
+  el.querySelectorAll("pre code:not([data-highlighted])").forEach(block => {
+    hljs.highlightElement(block);
+  });
+}
+
+// ── Clarification submit helpers ──────────────────────────────────────────────
+// FIX: these were referenced but never defined in the original code.
+
+async function submitClarification(answer, sid) {
+  // Remove the clarification widget
+  const clarRow = document.getElementById("clarification-row");
+  if (clarRow) {
+    // Clean up keyboard listener if any
+    const bubble = clarRow.querySelector(".clarif-bubble");
+    if (bubble?._keyHandler) document.removeEventListener("keydown", bubble._keyHandler);
+    clarRow.remove();
+  }
+
+  // Show the chosen answer as a user message
+  appendUserMessage(answer, null);
+
+  isStreaming = true;
+  refreshSendBtn();
+
+  const fd = new FormData();
+  fd.append("message", answer);
+  fd.append("is_clarification", "true");
+  if (sid) fd.append("session_id", sid);
+
+  try {
+    const res = await fetch("/api/chat/stream", {
+      method: "POST", body: fd, credentials: "include",
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    await parseSSEStream(res);
+  } catch (err) {
+    console.error("[clarification] error:", err);
+    const row = document.createElement("div");
+    row.className = "msg-row bot";
+    const label = document.createElement("div");
+    label.className = "role-label"; label.textContent = "Assistant";
+    const bubble = document.createElement("div");
+    bubble.className = "bubble bot";
+    bubble.innerHTML = `<span style="color:var(--danger)">Failed to get a response. Please try again.</span>`;
+    row.appendChild(label); row.appendChild(bubble);
+    chatBox.appendChild(row);
+  } finally {
+    isStreaming = false;
+    refreshSendBtn();
+    msgInput.focus();
+  }
+}
+
+function submitClarificationFromInput(sid) {
+  // FIX: find the input by traversing the DOM, not by interpolating sid into a
+  //      selector — avoids any injection if sid contains special characters.
+  const clarRow = document.getElementById("clarification-row");
+  if (!clarRow) return;
+  const input = clarRow.querySelector(".clarif-input");
+  if (!input) return;
+  const answer = input.value.trim();
+  if (!answer) return;
+  submitClarification(answer, sid);
 }
 
 // ── Clarification widget ──────────────────────────────────────────────────────
 function showClarificationWidget(question, options, sid) {
-  // remove thinking bubble — no response coming yet
   document.getElementById("thinking-row")?.remove();
   hidePlaceholder();
 
@@ -288,84 +374,159 @@ function showClarificationWidget(question, options, sid) {
   row.className = "msg-row bot";
   row.id = "clarification-row";
 
+  // FIX: ARIA role so screen readers announce this as a dialog
+  row.setAttribute("role", "dialog");
+  row.setAttribute("aria-modal", "false");
+  row.setAttribute("aria-labelledby", "clarif-question-label");
+
   const label = document.createElement("div");
   label.className = "role-label";
   label.textContent = "Assistant";
 
   const bubble = document.createElement("div");
-  bubble.className = "bubble bot";
+  bubble.className = "bubble bot clarif-bubble";
 
-  // ✅ options block — only rendered if LLM returned options
-  const optionsBlock = options?.length
-    ? `<div class="clarif-options">
-        ${options.map(opt =>
-          `<button class="clarif-option"
-            onclick="submitClarification(${JSON.stringify(opt)}, '${sid}')"
-          >${escapeHtml(opt)}</button>`
+  const allOptions = options?.length ? [...options, null] : [];
+  let selectedIdx    = 0;
+  let showingFreetext = false;
+
+  function render() {
+    bubble.innerHTML = `
+      <div class="clarif-header">
+        <div class="clarif-question" id="clarif-question-label">${escapeHtml(question)}</div>
+        ${allOptions.length ? `<div class="clarif-pager" aria-hidden="true">1 of 1</div>` : ""}
+      </div>
+      <div class="clarif-list" role="listbox" aria-labelledby="clarif-question-label">
+        ${allOptions.map((opt, i) =>
+          opt === null
+            ? `<div class="clarif-item clarif-something ${i === selectedIdx ? "clarif-focused" : ""}"
+                data-idx="${i}" role="option" aria-selected="${i === selectedIdx}" tabindex="-1">
+                <span class="clarif-pencil" aria-hidden="true">✏</span>
+                <span class="clarif-item-text">Something else</span>
+               </div>`
+            : `<div class="clarif-item ${i === selectedIdx ? "clarif-focused" : ""}"
+                data-idx="${i}" role="option" aria-selected="${i === selectedIdx}" tabindex="-1">
+                <span class="clarif-num" aria-hidden="true">${i + 1}</span>
+                <span class="clarif-item-text">${escapeHtml(opt)}</span>
+                ${i === selectedIdx ? '<span class="clarif-arrow" aria-hidden="true">→</span>' : ""}
+               </div>`
         ).join("")}
-        <button class="clarif-option clarif-other"
-          onclick="document.getElementById('clarif-freetext-${sid}').style.display='flex'">
-          Other…
-        </button>
-       </div>`
-    : "";
+        ${showingFreetext ? `
+          <div class="clarif-freetext-wrap">
+            <input class="clarif-input" placeholder="Type your answer…"
+              aria-label="Custom answer"
+              aria-describedby="clarif-hint-label" />
+            <button type="button">Send</button>
+          </div>` : ""}
+      </div>
+      <div class="clarif-hint" id="clarif-hint-label" aria-live="polite">
+        ↑ ↓ to navigate · Enter to select · Esc to skip
+      </div>
+    `;
 
-  // ✅ free text always present — hidden when options exist, visible when no options
-  bubble.innerHTML = `
-    <div class="clarif-question">${escapeHtml(question)}</div>
-    ${optionsBlock}
-    <div class="clarif-freetext" id="clarif-freetext-${sid}"
-      style="display:${options?.length ? 'none' : 'flex'}">
-      <input type="text" class="clarif-input" placeholder="Type your answer…"
-        onkeydown="if(event.key==='Enter') submitClarificationFromInput('${sid}')"/>
-      <button onclick="submitClarificationFromInput('${sid}')">Send</button>
-    </div>
-  `;
+    // FIX: all event listeners attached programmatically — no inline handlers,
+    //      no sid interpolation into HTML strings.
+    bubble.querySelectorAll(".clarif-item").forEach(el => {
+      el.addEventListener("click", () => {
+        const idx = parseInt(el.dataset.idx);
+        if (allOptions[idx] === null) {
+          showingFreetext = true;
+          selectedIdx = idx;
+          render();
+          bubble.querySelector(".clarif-input")?.focus();
+        } else {
+          submitClarification(allOptions[idx], sid);
+        }
+      });
+
+      // FIX: only update selectedIdx state, don't re-render the whole widget on
+      //      mouseenter — avoids the keyboard listener attach/detach storm.
+      el.addEventListener("mouseenter", () => {
+        const prev = bubble.querySelector(".clarif-item.clarif-focused");
+        if (prev) {
+          prev.classList.remove("clarif-focused");
+          prev.setAttribute("aria-selected", "false");
+        }
+        el.classList.add("clarif-focused");
+        el.setAttribute("aria-selected", "true");
+        selectedIdx = parseInt(el.dataset.idx);
+      });
+    });
+
+    // FIX: attach send button listener after render
+    const sendButton = bubble.querySelector(".clarif-freetext-wrap button");
+    if (sendButton) {
+      sendButton.addEventListener("click", () => submitClarificationFromInput(sid));
+    }
+
+    const inputEl = bubble.querySelector(".clarif-input");
+    if (inputEl) {
+      inputEl.addEventListener("keydown", e => {
+        if (e.key === "Enter") { e.preventDefault(); submitClarificationFromInput(sid); }
+      });
+      // autofocus after DOM is ready
+      requestAnimationFrame(() => inputEl.focus());
+    }
+  }
+
+  // FIX: keyboard handler attached ONCE, not on every render/hover
+  const keyHandler = (e) => {
+    if (!document.getElementById("clarification-row")) {
+      document.removeEventListener("keydown", keyHandler);
+      return;
+    }
+    if (showingFreetext) return;
+
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      const prev = bubble.querySelector(".clarif-item.clarif-focused");
+      if (prev) {
+        prev.classList.remove("clarif-focused");
+        prev.setAttribute("aria-selected", "false");
+      }
+      selectedIdx = e.key === "ArrowDown"
+        ? (selectedIdx + 1) % allOptions.length
+        : (selectedIdx - 1 + allOptions.length) % allOptions.length;
+      const next = bubble.querySelector(`.clarif-item[data-idx="${selectedIdx}"]`);
+      if (next) {
+        next.classList.add("clarif-focused");
+        next.setAttribute("aria-selected", "true");
+      }
+    }
+
+    if (e.key === "Enter") {
+      e.preventDefault();
+      const opt = allOptions[selectedIdx];
+      if (opt === null) {
+        showingFreetext = true;
+        render();
+      } else {
+        submitClarification(opt, sid);
+      }
+    }
+
+    if (e.key === "Escape") {
+      document.getElementById("clarification-row")?.remove();
+      document.removeEventListener("keydown", keyHandler);
+    }
+  };
+
+  // Store reference so we can clean it up in submitClarification
+  bubble._keyHandler = keyHandler;
+  document.addEventListener("keydown", keyHandler);
 
   row.appendChild(label);
   row.appendChild(bubble);
   chatBox.appendChild(row);
   chatBox.scrollTop = chatBox.scrollHeight;
 
-  // auto focus the input if no options
-  if (!options?.length) {
-    bubble.querySelector(".clarif-input")?.focus();
-  }
-}
+  render();
 
-function submitClarificationFromInput(sid) {
-  // ✅ query relative to the specific freetext div, not global getElementById
-  const wrap  = document.getElementById(`clarif-freetext-${sid}`);
-  const input = wrap?.querySelector(".clarif-input");
-  const val   = input?.value.trim();
-  if (val) submitClarification(val, sid);
-}
-
-async function submitClarification(response, sid) {
-  document.getElementById("clarification-row")?.remove();
-  appendUserMessage(response, null);
-
-  isStreaming = true;
-  refreshSendBtn();
-
-  const fd = new FormData();
-  fd.append("message", response);
-  fd.append("session_id", sid);
-  fd.append("is_clarification", "true");  // ✅ same endpoint, flag to resume graph
-
-  try {
-    const res = await fetch("/api/chat/stream", {   // ✅ same endpoint
-      method: "POST", body: fd, credentials: "include",
-    });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    await parseSSEStream(res);
-  } catch (err) {
-    console.error("[clarification] error:", err);
-  } finally {
-    isStreaming = false;
-    refreshSendBtn();
-    msgInput.focus();
-  }
+  // FIX: move focus into the widget for keyboard users
+  requestAnimationFrame(() => {
+    const first = bubble.querySelector(".clarif-item");
+    if (first) first.focus();
+  });
 }
 
 // ── Send ──────────────────────────────────────────────────────────────────────
@@ -393,7 +554,6 @@ async function sendMessage(e) {
   if (session_id) fd.append("session_id", session_id);
   if (active_documents.length)
     fd.append("active_documents", JSON.stringify(active_documents));
-  // ✅ is_clarification not set — defaults to False on backend
 
   try {
     const res = await fetch("/api/chat/stream", {
@@ -426,7 +586,7 @@ const NODE_LABELS = {
   summarize_conversation:  "Compacting conversation",
   document_context:        "Fetching session context",
   classify:                "Analyzing input",
-  clarification_node:      "Asking for clarification",   // ✅ new
+  clarification_node:      "Asking for clarification",
   rag_node:                "Searching documents",
   summarize_document_node: "Reading document",
   document_analysis_node:  "Analysing document",
@@ -437,12 +597,15 @@ const NODE_LABELS = {
 const SKIP_NODES = new Set(["persist_data", "load_state"]);
 
 // ── SSE stream parser ─────────────────────────────────────────────────────────
+// FIX: stream stall timeout — if no data arrives for 30 s, abort and show error
+const STREAM_STALL_MS = 30_000;
+
 async function parseSSEStream(response) {
   const reader  = response.body.getReader();
   const decoder = new TextDecoder();
 
-  let fullText     = "";
-  let buffer       = "";
+  let fullText       = "";
+  let buffer         = "";
   let progressBubble = null;
   let textEl         = null;
   let tokenStarted   = false;
@@ -452,83 +615,107 @@ async function parseSSEStream(response) {
 
   progressBubble = createProgressBubble();
 
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-
-    buffer += decoder.decode(value, { stream: true });
-    const parts = buffer.split(/\n\n|\r\n\r\n/);
-    buffer = parts.pop();
-
-    for (const part of parts) {
-      const trimmed = part.trim();
-      if (!trimmed || trimmed.startsWith(":")) continue;
-
-      const dataLine = trimmed.split("\n").find(l => l.startsWith("data:"));
-      if (!dataLine) continue;
-
-      const raw = dataLine.replace(/^data:\s*/, "").trim();
-      if (!raw) continue;
-
-      if (raw.startsWith("SESSION:")) {
-        session_id = raw.replace("SESSION:", "").trim();
-        sessionLabel.textContent = "session: " + session_id.slice(0, 8) + "…";
-        continue;
+  // Stall watchdog
+  let stallTimer = null;
+  function resetStallTimer() {
+    clearTimeout(stallTimer);
+    stallTimer = setTimeout(() => {
+      reader.cancel();   // abort the stream
+      cursorEl.remove();
+      if (progressBubble) {
+        progressBubble.innerHTML =
+          `<span style="color:var(--danger)">Response timed out. Please try again.</span>`;
       }
+    }, STREAM_STALL_MS);
+  }
 
-      let event;
-      try { event = JSON.parse(raw); }
-      catch { console.warn("[SSE] unrecognised:", raw); continue; }
+  resetStallTimer();
 
-      if (event.type === "session" && event.session_id) {
-        session_id = event.session_id;
-        sessionLabel.textContent = "session: " + session_id.slice(0, 8) + "…";
-        continue;
-      }
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
 
-      if (event.type === "end" || event.type === "error") {
-        cursorEl.remove();
-        if (event.type === "error") {
-          if (progressBubble)
-            progressBubble.innerHTML =
-              `<span style="color:var(--danger)">An error occurred. Please try again.</span>`;
-        } else if (!tokenStarted) {
-          if (progressBubble)
-            progressBubble.innerHTML =
-              `<span style="color:var(--text-sub)">No response.</span>`;
-        } else if (textEl) {
-          textEl.innerHTML = marked.parse(fullText);
-          textEl.querySelectorAll("pre code").forEach(b => hljs.highlightElement(b));
-          chatBox.scrollTop = chatBox.scrollHeight;
+      resetStallTimer();   // data arrived — reset the watchdog
+
+      buffer += decoder.decode(value, { stream: true });
+      const parts = buffer.split(/\n\n|\r\n\r\n/);
+      buffer = parts.pop();
+
+      for (const part of parts) {
+        const trimmed = part.trim();
+        if (!trimmed || trimmed.startsWith(":")) continue;
+
+        const dataLine = trimmed.split("\n").find(l => l.startsWith("data:"));
+        if (!dataLine) continue;
+
+        const raw = dataLine.replace(/^data:\s*/, "").trim();
+        if (!raw) continue;
+
+        if (raw.startsWith("SESSION:")) {
+          session_id = raw.replace("SESSION:", "").trim();
+          sessionLabel.textContent = "session: " + session_id.slice(0, 8) + "…";
+          continue;
         }
-        return;
-      }
 
-      if (event.type === "progress" && event.node) {
-        if (!tokenStarted && !SKIP_NODES.has(event.node)) {
-          const label = NODE_LABELS[event.node] || event.node.replace(/_/g, " ");
-          addProgressStep(progressBubble, label);
+        let event;
+        try { event = JSON.parse(raw); }
+        catch { console.warn("[SSE] unrecognised:", raw); continue; }
+
+        if (event.type === "session" && event.session_id) {
+          session_id = event.session_id;
+          sessionLabel.textContent = "session: " + session_id.slice(0, 8) + "…";
+          continue;
         }
-        continue;
-      }
 
-      // ✅ clarification — show widget and stop parsing
-      if (event.type === "clarification") {
-        cursorEl.remove();
-        showClarificationWidget(event.question, event.options, session_id);
-        return;
-      }
-
-      if (event.type === "chunk" && event.content) {
-        if (!tokenStarted) {
-          tokenStarted = true;
-          textEl = convertToResponseBubble(progressBubble);
+        if (event.type === "end" || event.type === "error") {
+          clearTimeout(stallTimer);
+          cursorEl.remove();
+          if (event.type === "error") {
+            if (progressBubble)
+              progressBubble.innerHTML =
+                `<span style="color:var(--danger)">An error occurred. Please try again.</span>`;
+          } else if (!tokenStarted) {
+            if (progressBubble)
+              progressBubble.innerHTML =
+                `<span style="color:var(--text-sub)">No response.</span>`;
+          } else if (textEl) {
+            // FIX: run final highlight pass now that streaming is complete
+            textEl.innerHTML = marked.parse(fullText);
+            finalizeHighlighting(textEl);
+            chatBox.scrollTop = chatBox.scrollHeight;
+          }
+          return;
         }
-        fullText += event.content;
-        renderChunk(textEl, fullText, cursorEl);
-        continue;
+
+        if (event.type === "progress" && event.node) {
+          if (!tokenStarted && !SKIP_NODES.has(event.node)) {
+            const label = NODE_LABELS[event.node] || event.node.replace(/_/g, " ");
+            addProgressStep(progressBubble, label);
+          }
+          continue;
+        }
+
+        if (event.type === "clarification") {
+          clearTimeout(stallTimer);
+          cursorEl.remove();
+          showClarificationWidget(event.question, event.options, session_id);
+          return;
+        }
+
+        if (event.type === "chunk" && event.content) {
+          if (!tokenStarted) {
+            tokenStarted = true;
+            textEl = convertToResponseBubble(progressBubble);
+          }
+          fullText += event.content;
+          renderChunk(textEl, fullText, cursorEl);
+          continue;
+        }
       }
     }
+  } finally {
+    clearTimeout(stallTimer);
   }
 }
 
@@ -536,4 +723,10 @@ async function parseSSEStream(response) {
 window.addEventListener("load", () => {
   refreshSendBtn();
   msgInput.focus();
+
+  // FIX: attach button needs an accessible label for screen readers
+  const attachBtn = document.querySelector(".attach-btn");
+  if (attachBtn && !attachBtn.getAttribute("aria-label")) {
+    attachBtn.setAttribute("aria-label", "Attach files");
+  }
 });

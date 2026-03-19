@@ -6,110 +6,181 @@ import re
 
 
 class Intent(str, Enum):
-    FACTUAL = "factual"
-    DOC_ANALYSIS = "doc_analysis"
-    COMPARISON = "comparison"
-    CONVERSATION = "conversation"
-    SUMMARY = "summary"
-    TOOL = "tool"
-    OUT_OF_SCOPE = "out_of_scope"
+    FACTUAL       = "factual"
+    DOC_ANALYSIS  = "doc_analysis"
+    COMPARISON    = "comparison"
+    CONVERSATION  = "conversation"
+    SUMMARY       = "summary"
+    TOOL          = "tool"
+    OUT_OF_SCOPE  = "out_of_scope"
 
 
 VALID_LABELS = " | ".join(i.value for i in Intent)
 
 
 SIMPLE_TOOLS_DESCRIPTION = """
-- `web_search`        → Search the web for current news, prices, facts, or real-time data
-- `fetch_url`         → Fetch and read the content of a URL/link the user provided
-- `convert_currency`  → Convert an amount between currencies using live exchange rates
+- `web_search`       → Search the web for current news, prices, facts, or real-time data
+- `fetch_url`        → Fetch and read the content of a URL/link the user provided
+- `convert_currency` → Convert an amount between currencies using live exchange rates
 """.strip()
+
+
 
 INTENT_PROMPT = """
 You are an intent classifier and document resolver for a RAG-based document assistant.
 
-## All Session Documents
+════════════════════════════════════════
+SESSION DOCUMENTS (all documents uploaded so far)
+════════════════════════════════════════
 {session_docs_formatted}
 
-## Active (Recently Uploaded) Documents
+════════════════════════════════════════
+ACTIVE DOCUMENTS (most recently uploaded in this turn)
+════════════════════════════════════════
 {active_docs_formatted}
 
-## Document Resolution Priority
-- If the query refers to "this document", "current document", "just uploaded" → resolve from Active Documents first
-- If the query mentions a specific filename or past document → resolve from All Session Documents
-- Only include documents where `status == "ready"`
-- If ambiguous and no specific doc is mentioned → include ALL ready documents from session
+════════════════════════════════════════
+DOCUMENT RESOLUTION RULES
+════════════════════════════════════════
+- "this document" / "current document" / "just uploaded" → resolve from ACTIVE DOCUMENTS first
+- Specific filename or past document mentioned → resolve from SESSION DOCUMENTS
+- Only include documents where status == "ready"
+- If no specific document is mentioned and session has ready documents → include ALL ready session documents
+- `resolved_document_ids` MUST be [] for intents: conversation | tool | out_of_scope
 
-## Classification Rules
-If the query is ambiguous and you cannot confidently classify it:
-- Set "needs_clarification": true
-- Write a short "clarification_question"  
-- Optionally set "clarification_options": ["opt1", "opt2"] if obvious choices exist
-- Leave options null if free-text reply is better
+════════════════════════════════════════
+INTENT DEFINITIONS
+════════════════════════════════════════
+Document intents (only valid when at least one ready document is resolved):
+  factual      → User asks for a specific fact, clause, value, or detail from a document
+  doc_analysis → User wants structural analysis (word count, extract entities, tables, etc.)
+  summary      → User wants a summary or high-level overview of a document
+  comparison   → User wants to compare content across multiple documents or sections
 
-### Document intents (requires at least one resolved ready document):
-- `factual`      → Specific fact or detail from a document (e.g. "who signed?", "what is clause 5?")
-- `doc_analysis` → Full-document analysis (e.g. "how many words?", "extract all locations")
-- `summary`      → User wants a summary or overview of a document
-- `comparison`   → Compare across multiple documents or sections
+General intents:
+  conversation → Greeting, chitchat, or no ready documents are available
+  tool         → Query requires an external tool (see AVAILABLE TOOLS below)
+  out_of_scope → Query is completely outside the assistant's domain
 
-### General intents:
-- `conversation` → Chitchat, greetings, or no ready documents available
-- `tool`         → Needs an external tool (see available tools below)
-- `out_of_scope` → Completely outside the assistant's domain
-
-## Available Simple Tools (only for `tool` intent)
+════════════════════════════════════════
+AVAILABLE TOOLS  (only relevant when intent == "tool")
+════════════════════════════════════════
 {simple_tools_description}
 
-## Tool Selection Rules (only when intent is `tool`)
-- Set `selected_tools` to a list of tool names FROM the list above that should run
-- Set `selected_tools: []` if the tool needed is NOT in the list above (LLM will handle it)
-- Set `sequential: true` if tool 2 needs the output of tool 1 (e.g. search price THEN convert)
-- Set `sequential: false` if tools are independent and can run at the same time
+Tool selection rules:
+  - Set selected_tools to tool names from the list above that should run
+  - Set selected_tools: [] if no tool above fits (the LLM will handle it directly)
+  - Set sequential: true  if tool 2 needs the output of tool 1
+  - Set sequential: false if tools can run in parallel
 
-## Output Rules
-- `resolved_document_ids` must be [] for: `conversation`, `tool`, `out_of_scope`
-- Only return IDs that appear in the document lists above
-- `selected_tools` and `sequential` only matter when intent is `tool`
 
-## Output Format
-Respond ONLY with a valid JSON object. No explanation, no markdown, no extra text.
+════════════════════════════════════════
+CLARIFICATION HISTORY  ← ALREADY ANSWERED — DO NOT RE-ASK THESE
+════════════════════════════════════════
+{clarification_history}
+ 
+Rules for clarification history:
+- Every Q/A pair above has ALREADY been answered by the user. NEVER ask them again.
+- Treat all answers as confirmed facts when classifying.
+- Only set needs_clarification: true if critical information is STILL missing
+  that was NOT covered by any question already in the history above.
+- If the history gives you enough to classify confidently → SET needs_clarification: false
+  and return the correct intent immediately.
+
+════════════════════════════════════════
+CLARIFICATION RULES  ← READ CAREFULLY
+════════════════════════════════════════
+NEVER ask a follow-up question in your response text.
+If you need more information before you can classify accurately, you MUST signal it
+via the structured fields below — NOT by writing a question in "reasoning".
+
+Set needs_clarification: true ONLY when ALL of the following are true:
+  1. The query is genuinely ambiguous (multiple very different intents are equally likely)
+  2. You cannot make a reasonable default assumption
+  3. A one-sentence clarification question would meaningfully change your classification
+
+Set needs_clarification: false when:
+  - The intent is clear enough to proceed (even if not 100% certain)
+  - The query is a greeting, chitchat, or small-talk
+  - You could pick a reasonable default intent and proceed
+
+When needs_clarification is true:
+  - Write a SHORT, direct clarification_question (one sentence, no filler)
+  - Set clarification_options to 2–4 short option strings IF the answer is multiple-choice
+  - Set clarification_options: null if a free-text reply is more appropriate
+note : if user says create app then we need clarification question like "what type of app do you want to create?" with options "mobile", "web", "desktop" and what language do you want to use? with options "python", "javascript", "java"
+════════════════════════════════════════
+OUTPUT FORMAT
+════════════════════════════════════════
+Respond ONLY with a single valid JSON object.
+No explanation. No markdown fences. No extra text before or after the JSON.
 
 {{
-  "intent": "<one of: {valid_labels}>",
+  "intent": "<{valid_labels}>",
   "resolved_document_ids": [],
   "selected_tools": [],
   "sequential": false,
   "needs_clarification": false,
   "clarification_question": null,
   "clarification_options": null,
-  "reasoning": "<one sentence>"
+  "reasoning": "<one concise sentence — no questions here>"
+}}
 
-## User Query
+════════════════════════════════════════
+USER QUERY
+════════════════════════════════════════
 {query}
 """.strip()
 
+
+# ── Formatting helpers ────────────────────────────────────────────────────────
 
 def _format_docs(docs: list[dict]) -> str:
     if not docs:
         return "None."
     return "\n".join(
-        f"- file_id: {doc.get('file_id')} | filename: {doc.get('filename')} | status: {doc.get('status')}"
+        f"- file_id: {doc.get('file_id')} | "
+        f"filename: {doc.get('filename')} | "
+        f"status: {doc.get('status')}"
         for doc in docs
     )
 
 
 def _extract_json(text: str) -> dict:
-    """Extract JSON from LLM response, strip markdown fences if present."""
-    match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.DOTALL)
-    if match:
-        text = match.group(1)
+    """
+    Extract a JSON object from LLM output.
+    Handles:
+      - Raw JSON
+      - JSON wrapped in ```json ... ``` fences
+      - Stray text before/after the JSON object
+    """
+    # 1. Try stripping markdown fences
+    fenced = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.DOTALL)
+    if fenced:
+        return json.loads(fenced.group(1))
+
+    # 2. Try extracting the first {...} block (handles leading/trailing prose)
+    bare = re.search(r"\{.*\}", text, re.DOTALL)
+    if bare:
+        return json.loads(bare.group(0))
+
+    # 3. Last resort — parse the whole thing and let json.loads raise
     return json.loads(text.strip())
 
+def _format_clarification_history(history: list[dict] | None) -> str:
+    """Format accumulated Q&A pairs into a readable block for the prompt."""
+    if not history:
+        return "None — no clarification has been collected yet."
+    return "\n\n".join(
+        f"Q: {entry['question']}\nA: {entry['answer']}"
+        for entry in history
+    )
 
 def _build_ready_ids(
-    session_documents: list[dict], active_docs: list[dict]
+    session_documents: list[dict],
+    active_docs: list[dict],
 ) -> set[str]:
-    """Build set of all valid ready file_ids from both document pools."""
+    """Return the set of file_ids that are ready across both document pools."""
     all_docs = session_documents + active_docs
     return {
         doc["file_id"]
@@ -118,20 +189,36 @@ def _build_ready_ids(
     }
 
 
-# ── Known simple tool names — validate classifier output against this ─────────
-_SIMPLE_TOOL_NAMES = {"web_search", "fetch_url"}
+# ── Known simple tool names — classifier output is validated against this ─────
+_SIMPLE_TOOL_NAMES: frozenset[str] = frozenset({"web_search", "fetch_url", "convert_currency"})
+
+# ── Safe defaults returned on any failure path ────────────────────────────────
+_SAFE_DEFAULT: tuple = (
+    Intent.CONVERSATION,  
+    [],                  
+    [],                   
+    False,               
+    False,               
+    None,                 
+    None,                 
+)
 
 
 async def classify_and_resolve(
     query: str,
     session_documents: list[dict],
     active_docs: list[dict],
-) -> tuple[Intent, list[str], list[str], bool]:
+    clarification_history: list[dict] | None = None,
+
+) -> tuple[Intent, list[str], list[str], bool, bool, str | None, list[str] | None]:
     """
     Classifies intent, resolves document IDs, and selects tools in ONE LLM call.
 
-    Returns:
-        Tuple of (Intent, resolved_doc_ids, selected_tools, sequential)
+    Returns a 7-tuple:
+        (intent, resolved_doc_ids, selected_tools, sequential,
+         needs_clarification, clarification_question, clarification_options)
+
+    Never raises — always returns _SAFE_DEFAULT on failure.
     """
     llm = LLMFactory.create_llm(
         provider="gemini",
@@ -145,41 +232,67 @@ async def classify_and_resolve(
         active_docs_formatted=_format_docs(active_docs),
         valid_labels=VALID_LABELS,
         simple_tools_description=SIMPLE_TOOLS_DESCRIPTION,
+        clarification_history=_format_clarification_history(clarification_history),
     )
 
-    response = await llm.ainvoke(prompt)
-    raw = response.content.strip()
+    try:
+        response = await llm.ainvoke(prompt)
+        raw = response.content.strip()
+    except Exception as e:
+        print(f"[classifier] LLM call failed: {e}")
+        return _SAFE_DEFAULT
+
     try:
         parsed = _extract_json(raw)
+    except (json.JSONDecodeError, ValueError) as e:
+        print(f"[classifier] JSON parse failed: {e}\nRaw output:\n{raw}")
+        return _SAFE_DEFAULT
 
-        label = parsed.get("intent", "").strip().lower()
+    try:
+        # ── Intent
+        label  = parsed.get("intent", "").strip().lower()
         intent = next(
             (i for i in Intent if i.value == label),
             Intent.CONVERSATION,
         )
 
-        ready_ids = _build_ready_ids(session_documents, active_docs)
+        # ── Document IDs — only for document intents
+        ready_ids    = _build_ready_ids(session_documents, active_docs)
         resolved_ids = [
-            fid for fid in parsed.get("resolved_document_ids", []) if fid in ready_ids
+            fid
+            for fid in parsed.get("resolved_document_ids", [])
+            if fid in ready_ids
         ]
 
-        # ── Tool selection
-        # Only trust selected_tools when intent is actually tool
-        # Validate each name against known simple tools — discard unknown names
-        raw_tools = parsed.get("selected_tools", []) if intent == Intent.TOOL else []
+        # ── Tools — only trusted when intent is tool; unknown names discarded
+        raw_tools      = parsed.get("selected_tools", []) if intent == Intent.TOOL else []
         selected_tools = [t for t in raw_tools if t in _SIMPLE_TOOL_NAMES]
-        sequential = bool(parsed.get("sequential", False))
-        needs_clarification = bool(parsed.get("needs_clarification", False))
-        clarification_question = parsed.get("clarification_question")
-        clarification_options = parsed.get("clarification_options")  # None or list
+        sequential     = bool(parsed.get("sequential", False))
+
+        # ── Clarification
+        needs_clarification    = bool(parsed.get("needs_clarification", False))
+        clarification_question = parsed.get("clarification_question") or None
+        clarification_options  = parsed.get("clarification_options")  # None or list[str]
+
+        # Guard: if clarification is needed, question must be present
+        if needs_clarification and not clarification_question:
+            print("[classifier] needs_clarification=true but no question supplied — ignoring")
+            needs_clarification = False
+
+        # Guard: options must be a non-empty list or None
+        if clarification_options is not None:
+            if not isinstance(clarification_options, list) or not clarification_options:
+                clarification_options = None
 
         print(
             f"[classifier] intent={intent.value} | "
-            f"resolved_docs={resolved_ids} | "
+            f"docs={resolved_ids} | "
             f"tools={selected_tools} | "
             f"sequential={sequential} | "
-            f"reason={parsed.get('reasoning')}"
+            f"clarify={needs_clarification} | "
+            f"reason={parsed.get('reasoning', '')}"
         )
+
         return (
             intent,
             resolved_ids,
@@ -190,49 +303,54 @@ async def classify_and_resolve(
             clarification_options,
         )
 
-    except (json.JSONDecodeError, KeyError) as e:
-        print(f"[classifier] Failed to parse LLM response: {e}\nRaw: {raw}")
-        return Intent.CONVERSATION, [], [], False
+    except Exception as e:
+        print(f"[classifier] Unexpected error while processing parsed output: {e}")
+        return _SAFE_DEFAULT
 
+
+# ── LangGraph node ────────────────────────────────────────────────────────────
 
 async def classifier_node(state: ChatState) -> ChatState:
     print("[classifier_node] Running...")
 
     session_documents = state.get("session_documents", [])
-    active_docs = state.get("active_documents", [])
+    active_docs       = state.get("active_documents", [])
     user_clarification = state.get("user_clarification")
-    query = state["user_input"]
-    if user_clarification:
-        query = f"{query}\n\nUser clarified: {user_clarification}"
+    clarification_history = state.get("clarification_history") or []
 
-    try:
-        (
-            intent,
-            resolved_document_ids,
-            selected_tools,
-            sequential,
-            needs_clarification,
-            clarification_question,
-            clarification_options,
-        ) = await classify_and_resolve(
-            query=state["user_input"],
-            session_documents=session_documents,
-            active_docs=active_docs,
+
+    query = state["user_input"]
+    if clarification_history:
+        qa_text = "\n\n".join(
+            f"Q: {e['question']}\nA: {e['answer']}"
+            for e in clarification_history
         )
-    except Exception as e:
-        print(f"[classifier_node] Unexpected error: {e}. Defaulting to CONVERSATION.")
-        intent = Intent.CONVERSATION
-        resolved_document_ids = []
-        selected_tools = []
-        sequential = False
+        query = f"{query}\n\nClarification so far:\n{qa_text}"
+
+    # classify_and_resolve never raises — safe to call without try/except
+    (
+        intent,
+        resolved_document_ids,
+        selected_tools,
+        sequential,
+        needs_clarification,
+        clarification_question,
+        clarification_options,
+    ) = await classify_and_resolve(
+        query=query,                       
+        session_documents=session_documents,
+        active_docs=active_docs,
+        clarification_history=clarification_history,
+
+    )
 
     return {
         **state,
-        "intent": intent.value,
-        "document_id": resolved_document_ids,
-        "selected_tools": selected_tools,
-        "sequential": sequential,
-        "needs_clarification": needs_clarification,
+        "intent":                 intent.value,
+        "document_id":            resolved_document_ids,
+        "selected_tools":         selected_tools,
+        "sequential":             sequential,
+        "clarification_needed":   needs_clarification,
         "clarification_question": clarification_question,
-        "clarification_options": clarification_options,
+        "clarification_options":  clarification_options,
     }

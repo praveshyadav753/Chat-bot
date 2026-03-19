@@ -1,11 +1,11 @@
 services:
 
-  # ── FastAPI app ──────────────────────────────────────────────────────────────
+  # ── FastAPI app ───────────────────────────────────────────────────────────────
   api:
     image: praveshyadav71/chatbot:latest
     build:
       context: .
-      dockerfile: app/dockerfile
+      dockerfile: dockerfile          
       target: runtime
     container_name: chatbot_api
     restart: unless-stopped
@@ -18,8 +18,8 @@ services:
       DATABASE_URL1: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       REDIS_URL: redis://redis:6379/0
     volumes:
-      - uploads_data:/app/uploads      # shared with celery worker
-      - chroma_data:/app/chroma_db     # shared vector store
+      - uploads_data:/app/uploads
+      - chroma_data:/app/chroma_db
     depends_on:
       postgres:
         condition: service_healthy
@@ -28,15 +28,16 @@ services:
     networks:
       - chatbot_net
 
-  # ── Celery worker ─────────────────────────────────────────────────────────────
+  # ── Celery worker different command 
   celery:
-    image: praveshyadav71/chatbot_celery:latest
-    build:
-      context: .
-      dockerfile: dockerfile
-      target: runtime
+    image: praveshyadav71/chatbot:latest   
     container_name: chatbot_celery
     restart: unless-stopped
+    command: ["celery", "-A", "app.celery_app", "worker",
+              "--loglevel=info",
+              "--concurrency=2",
+              "--pool=prefork",
+              "-Q", "default"]
     env_file:
       - .env
     environment:
@@ -44,8 +45,8 @@ services:
       DATABASE_URL1: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       REDIS_URL: redis://redis:6379/0
     volumes:
-      - uploads_data:/app/uploads      # reads uploaded files from api
-      - chroma_data:/app/chroma_db     # writes vectors, api reads them
+      - uploads_data:/app/uploads
+      - chroma_data:/app/chroma_db
     depends_on:
       postgres:
         condition: service_healthy
@@ -54,7 +55,7 @@ services:
     networks:
       - chatbot_net
 
-  # ── PostgreSQL with pgvector ──────────────────────────────────────────────────
+  # ── PostgreSQL with pgvector 
   postgres:
     image: pgvector/pgvector:pg16
     container_name: chatbot_postgres
@@ -66,8 +67,6 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./scripts/init_db.sql:/docker-entrypoint-initdb.d/init.sql:ro
-    # ports:
-    #   - "5432:5432"
     networks:
       - chatbot_net
     healthcheck:
@@ -76,7 +75,7 @@ services:
       timeout: 5s
       retries: 5
 
-  # ── Redis ─────────────────────────────────────────────────────────────────────
+  # ── Redis 
   redis:
     image: redis:7-alpine
     container_name: chatbot_redis
@@ -84,8 +83,6 @@ services:
     command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
     volumes:
       - redis_data:/data
-    # ports:
-    #   - "6379:6379"
     networks:
       - chatbot_net
     healthcheck:
@@ -108,13 +105,13 @@ services:
     networks:
       - chatbot_net
     profiles:
-      - dev                           
+      - dev
 
 volumes:
   postgres_data:
   redis_data:
-  uploads_data:                       # api writes, celery reads
-  chroma_data:                        # celery writes, api reads
+  uploads_data:
+  chroma_data:
 
 networks:
   chatbot_net:
