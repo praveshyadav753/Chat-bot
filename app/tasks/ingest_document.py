@@ -28,9 +28,9 @@ def publish_status(document_id: str, status: str, session_id: str, user_id: int)
     }
 
     redis_client.publish(
-        f"document_status:{user_id}",  
+        f"document_status:{user_id}",
         # "document_status",
-        json.dumps(payload)
+        json.dumps(payload),
     )
 
 
@@ -57,7 +57,9 @@ def store_rag_doc(
         doc.status = "PROCESSING"
         db.commit()
 
-        publish_status(document_id, "PROCESSING", session_id=session_id,user_id=user_id)
+        publish_status(
+            document_id, "PROCESSING", session_id=session_id, user_id=user_id
+        )
 
         docs = process_document(
             file_path,
@@ -67,7 +69,6 @@ def store_rag_doc(
             department,
         )
 
-        
         if not docs:
             doc.status = "FAILED"
             db.commit()
@@ -75,7 +76,7 @@ def store_rag_doc(
                 os.remove(file_path)
             except:
                 pass
-            publish_status(document_id, "FAILED", session_id,user_id=user_id)
+            publish_status(document_id, "FAILED", session_id, user_id=user_id)
             return False
 
         #  Store embeddings
@@ -85,7 +86,7 @@ def store_rag_doc(
         doc.status = "READY"
         db.commit()
 
-        publish_status(document_id, "READY", session_id,user_id=user_id)
+        publish_status(document_id, "READY", session_id, user_id=user_id)
 
         logger.warning("Document stored successfully")
         return True
@@ -97,7 +98,7 @@ def store_rag_doc(
             doc.status = "FAILED"
             db.commit()
 
-            publish_status(document_id, "FAILED", session_id,user_id=user_id)
+            publish_status(document_id, "FAILED", session_id, user_id=user_id)
 
         raise e
 

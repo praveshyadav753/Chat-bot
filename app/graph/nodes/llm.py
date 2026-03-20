@@ -17,7 +17,10 @@ async def llm_node(state: ChatState) -> ChatState:
 
         llm = LLMFactory.create_llm(streaming=True)
 
-        messages = [SystemMessage(content="You are a helpful assistant.")]
+        messages = state.get("messages", []).copy()
+
+        if not any(isinstance(m, SystemMessage) for m in messages):
+            messages.insert(0, SystemMessage(content="You are a helpful assistant."))
 
         if summary:
             messages.append(SystemMessage(content=f"Conversation summary:\n{summary}"))
