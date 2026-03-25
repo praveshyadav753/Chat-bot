@@ -6,12 +6,12 @@ from sse_starlette.sse import EventSourceResponse
 
 from app.auth.utility import get_current_active_user
 from app.core.config import settings
-
+import ssl
 router = APIRouter(prefix="/api", tags=["Events"])
 
 redis_client = redis.from_url(
     settings.REDIS_URL,
-    db=2,
+    ssl_cert_reqs=ssl.CERT_NONE,   # required for ElastiCache
     decode_responses=True,
 )
 

@@ -10,10 +10,14 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 
 load_dotenv()
 
-os.environ["GOOGLE_API_KEY"] = os.getenv("GOOGLE_API_KEY")
-os.environ["OPENAI_API_KEY"]  = os.getenv("OPENAI_API_KEY")
-os.environ["GROQ_API_KEY"] =  os.getenv("GROQ_API_KEY")
+if key := os.getenv("GOOGLE_API_KEY"):
+    os.environ["GOOGLE_API_KEY"] = key
 
+if key := os.getenv("OPENAI_API_KEY"):
+    os.environ["OPENAI_API_KEY"] = key
+
+if key := os.getenv("GROQ_API_KEY"):
+    os.environ["GROQ_API_KEY"] = key
 class LLMProvider(str, Enum):
     OPENAI = "openai"
     GROQ = "groq"

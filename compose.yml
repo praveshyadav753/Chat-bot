@@ -29,7 +29,7 @@ services:
 
   # ── Celery worker different command 
   celery:
-    image: praveshyadav71/chatbot:latest   
+    image: praveshyadav71/chatbot:v3     
     container_name: chatbot_celery
     restart: unless-stopped
     command: ["celery", "-A", "app.celery_app", "worker",
