@@ -1,0 +1,95 @@
+{
+  "containerDefinitions": [
+    {
+      "name": "Main",
+      "image": "702252494235.dkr.ecr.ap-south-1.amazonaws.com/chatapp:latest",
+      "cpu": 2048,
+      "memory": 16384,
+      "portMappings": [
+        {
+          "containerPort": 8000,
+          "hostPort": 8000,
+          "protocol": "tcp",
+          "name": "main-8000-tcp",
+          "appProtocol": "http"
+        }
+      ],
+      "essential": true,
+      "environment": [
+        {
+          "name": "LANGSMITH_TRACING",
+          "value": "true"
+        },
+        {
+          "name": "LANGSMITH_ENDPOINT",
+          "value": "https://api.smith.langchain.com"
+        },
+        {
+          "name": "LANGSMITH_PROJECT",
+          "value": "\"langGraph-tracing\""
+        }
+      ],
+      "environmentFiles": [
+        {
+          "value": "arn:aws:s3:::ritul-bhai-kibalti/.env",
+          "type": "s3"
+        }
+      ],
+      "mountPoints": [],
+      "volumesFrom": [],
+      "ulimits": [],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/chatapp",
+          "awslogs-create-group": "true",
+          "awslogs-region": "ap-south-1",
+          "awslogs-stream-prefix": "ecs"
+        },
+        "secretOptions": []
+      },
+      "systemControls": []
+    },
+    {
+      "name": "aws-otel-collector",
+      "image": "public.ecr.aws/aws-observability/aws-otel-collector:v0.47.0",
+      "cpu": 2048,
+      "portMappings": [],
+      "essential": true,
+      "command": [
+        "--config=/etc/ecs/ecs-cloudwatch-xray.yaml"
+      ],
+      "environment": [],
+      "mountPoints": [],
+      "volumesFrom": [],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/ecs-aws-otel-sidecar-collector",
+          "mode": "non-blocking",
+          "awslogs-create-group": "true",
+          "max-buffer-size": "25m",
+          "awslogs-region": "ap-south-1",
+          "awslogs-stream-prefix": "ecs"
+        },
+        "secretOptions": []
+      },
+      "systemControls": []
+    }
+  ],
+  "family": "chatapp",
+  "executionRoleArn": "arn:aws:iam::702252494235:role/ecsTaskExecutionRole",
+  "networkMode": "awsvpc",
+  "volumes": [],
+  "placementConstraints": [],
+  "runtimePlatform": {
+    "cpuArchitecture": "X86_64",
+    "operatingSystemFamily": "LINUX"
+  },
+  "requiresCompatibilities": [
+    "FARGATE"
+  ],
+  "cpu": "4096",
+  "memory": "16384",
+  "enableFaultInjection": false
+}
