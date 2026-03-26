@@ -32,13 +32,14 @@ jobs:
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         run: |
-          run: |
-          IMAGE_URI= ${ECR_REGISTRY }/${{ secrets.ECR_REPOSITORY }}:${{ github.sha }}
+          IMAGE_URI=${ECR_REGISTRY}/${{ secrets.ECR_REPOSITORY }}:${{ github.sha }}
           echo "IMAGE_URI=$IMAGE_URI"
+
           docker build --platform linux/amd64 -t $IMAGE_URI .
           docker push $IMAGE_URI
+
           echo "image=$IMAGE_URI" >> $GITHUB_OUTPUT
-          echo "Saved output: $(cat $GITHUB_OUTPUT)"   # verify it was written
+          echo "Saved output: $(cat $GITHUB_OUTPUT)"
 
 
   # ─────────────────────────────────────────────
