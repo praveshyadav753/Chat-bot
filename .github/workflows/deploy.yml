@@ -12,35 +12,49 @@ jobs:
   build:
     name: Build & Push Image
     runs-on: ubuntu-latest
+
     outputs:
       image: ${{ steps.build-image.outputs.image }}
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - uses: aws-actions/configure-aws-credentials@v4
+      - name: Configure AWS
+        uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.AWS_REGION }}          # ← directly from secrets
+          aws-region: ${{ secrets.AWS_REGION }}
 
-      - uses: aws-actions/amazon-ecr-login@v2
+      - name: Login to ECR
+        uses: aws-actions/amazon-ecr-login@v2
         id: login-ecr
 
-      - name: Build & Push
+      - name: Build & Push Image
         id: build-image
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY }}
+          IMAGE_TAG: ${{ github.sha }}
         run: |
-          IMAGE_URI=${ECR_REGISTRY}/${{ secrets.ECR_REPOSITORY }}:${{ github.sha }}
+          set -e
+
+          echo "Starting build..."
+
+          IMAGE_URI=${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}
+
           echo "IMAGE_URI=$IMAGE_URI"
 
-          docker build --platform linux/amd64 -t $IMAGE_URI .
-          docker push $IMAGE_URI
+          docker build --platform linux/amd64 -t "$IMAGE_URI" .
+          docker push "$IMAGE_URI"
 
-          echo "image=$IMAGE_URI" >> $GITHUB_OUTPUT
-          echo "Saved output: $(cat $GITHUB_OUTPUT)"
+          # ✅ Set output properly
+          echo "image=$IMAGE_URI" >> "$GITHUB_OUTPUT"
 
+          # ✅ Debug output
+          echo "---- GITHUB OUTPUT ----"
+          cat "$GITHUB_OUTPUT"
 
   # ─────────────────────────────────────────────
   # FASTAPI DEPLOY
@@ -51,13 +65,20 @@ jobs:
     needs: build
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - uses: aws-actions/configure-aws-credentials@v4
+      - name: Debug Image From Build
+        run: |
+          echo "Image received from build job:"
+          echo "${{ needs.build.outputs.image }}"
+
+      - name: Configure AWS
+        uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.AWS_REGION }}          # ← directly from secrets
+          aws-region: ${{ secrets.AWS_REGION }}
 
       - name: Render Task Definition
         id: task-def
@@ -84,13 +105,20 @@ jobs:
     needs: build
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - uses: aws-actions/configure-aws-credentials@v4
+      - name: Debug Image From Build
+        run: |
+          echo "Image received from build job:"
+          echo "${{ needs.build.outputs.image }}"
+
+      - name: Configure AWS
+        uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.AWS_REGION }}          # ← directly from secrets
+          aws-region: ${{ secrets.AWS_REGION }}
 
       - name: Render Task Definition
         id: task-def
