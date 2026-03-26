@@ -77,6 +77,10 @@
         {
           "name": "LANGSMITH_PROJECT",
           "valueFrom": "arn:aws:secretsmanager:ap-south-1:702252494235:secret:chatapp-secrets-HyxeOl:LANGSMITH_PROJECT::"
+        },
+         {
+          "name": "CHROMA_HOST",
+          "valueFrom": "arn:aws:secretsmanager:ap-south-1:702252494235:secret:chatapp-secrets-HyxeOl:CHROMA_HOST::"
         }
       ],
       "portMappings": [],
