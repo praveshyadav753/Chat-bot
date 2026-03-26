@@ -1,19 +1,18 @@
-from typing import List
-from fastapi import APIRouter, HTTPException, UploadFile, File, Depends
+from typing import List, Optional
+from fastapi import APIRouter, HTTPException, UploadFile, File, Depends, Form
 from uuid import uuid4
-import os
-import aiofiles
+import boto3
+from botocore.exceptions import BotoCoreError, ClientError
 
 from app.tasks.ingest_document import store_rag_doc
 from app.models.document import Document
 from app.models.connection import get_db
 from app.auth.utility import get_current_active_user
-from typing import Optional
-from fastapi import Form
+from app.core.config import settings  # S3_BUCKET, AWS_REGION pulled from here
 
 router = APIRouter(prefix="/api/documents", tags=["Documents"])
 
-UPLOAD_DIR = "uploads"
+s3_client = boto3.client("s3", region_name=settings.AWS_REGION)
 
 
 @router.post("/upload")
@@ -23,43 +22,41 @@ async def upload_document(
     db=Depends(get_db),
     session_id: Optional[str] = Form(None),
 ):
-
-    os.makedirs(UPLOAD_DIR, exist_ok=True)
-
     uploaded_docs = []
 
     for file in documents:
-
         file_id = str(uuid4())
-        file_path = os.path.join(UPLOAD_DIR, f"{file_id}_{file.filename}")
+        s3_key = f"uploads/{file_id}_{file.filename}"
 
-        
+        # ── Upload to S3 ──────────────────────────────────────────────────────
+        try:
+            file_contents = await file.read()
+            s3_client.put_object(
+                Bucket=settings.S3_BUCKET,
+                Key=s3_key,
+                Body=file_contents,
+                ContentType=file.content_type or "application/octet-stream",
+            )
+        except (BotoCoreError, ClientError) as e:
+            raise HTTPException(status_code=500, detail=f"S3 upload failed: {str(e)}")
 
+        # ── Save DB record ────────────────────────────────────────────────────
         new_doc = Document(
             id=file_id,
             filename=file.filename,
-            file_path=file_path,
+            file_path=s3_key,          # store S3 key, not a local path
             uploaded_by=user.id,
             access_level=user.access_level,
             department=user.department,
             status="PROCESSING",
             session_id=session_id,
         )
-        try:
-            async with aiofiles.open(file_path, "wb") as f:
-                while chunk := await file.read(1024 * 1024):
-                    await f.write(chunk)
-        except Exception as e:
-            # Delete the database entry
-            await db.delete(new_doc)
-            await db.commit()
-            raise HTTPException(status_code=500, detail="File upload failed")
-
         db.add(new_doc)
         await db.commit()
 
+        # ── Dispatch Celery task ──────────────────────────────────────────────
         store_rag_doc.delay(
-            file_path=file_path,
+            s3_key=s3_key,
             document_id=file_id,
             session_id=session_id,
             user_id=user.id,
@@ -70,9 +67,7 @@ async def upload_document(
         uploaded_docs.append({
             "document_id": file_id,
             "filename": file.filename,
-            "status": "PROCESSING"
+            "status": "PROCESSING",
         })
 
-    return {
-        "documents": uploaded_docs
-    }
+    return {"documents": uploaded_docs}

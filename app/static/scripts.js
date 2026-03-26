@@ -4,6 +4,15 @@
 
 marked.setOptions({ gfm: true, breaks: true });
 
+// ── UUID helper (works in non-secure HTTP contexts too) ───────────────────────
+const _uuid = () =>
+  (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function")
+    ? crypto.randomUUID()
+    : "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, c => {
+        const r = Math.random() * 16 | 0;
+        return (c === "x" ? r : (r & 0x3 | 0x8)).toString(16);
+      });
+
 // ── State ─────────────────────────────────────────────────────────────────────
 let session_id      = null;
 let isStreaming     = false;
@@ -47,7 +56,7 @@ msgInput.addEventListener("keydown", e => {
 // ── File input ────────────────────────────────────────────────────────────────
 fileInput.addEventListener("change", () => {
   Array.from(fileInput.files).forEach(file => {
-    const tempId = crypto.randomUUID();
+    const tempId = _uuid();
     const entry  = { tempId, file, document_id: null, status: "uploading" };
     uploadedFiles.push(entry);
     renderChip(entry);
