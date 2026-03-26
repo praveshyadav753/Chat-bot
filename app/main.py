@@ -91,7 +91,7 @@ app.include_router(documents.router)
 app.include_router(update__event.router)
 app.include_router(sessions_router)
 
-@app.get("/")
+@app.get("/health")
 def health():
     return {"status": "ok"}
 
