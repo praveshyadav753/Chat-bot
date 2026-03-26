@@ -224,7 +224,8 @@ async def classify_and_resolve(
         provider="gemini",
         model="gemini-2.5-flash-lite",
         temperature=0,
-        fallbacks=[
+        fallbacks=[ {"provider": "groq"},
+        {"provider": "gemini", "temperature": 0.1},]
     )
 
     prompt = INTENT_PROMPT.format(
