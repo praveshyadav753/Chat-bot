@@ -6,6 +6,9 @@ on:
       - deployement
 
 jobs:
+  # ─────────────────────────────────────────────
+  # BUILD IMAGE
+  # ─────────────────────────────────────────────
   build:
     name: Build & Push Image
     runs-on: ubuntu-latest
@@ -19,21 +22,28 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.AWS_REGION }}
+          aws-region: ${{ secrets.AWS_REGION }}          # ← directly from secrets
 
       - uses: aws-actions/amazon-ecr-login@v2
-        id: login-ecr                                         # ← give it an id
+        id: login-ecr
 
       - name: Build & Push
         id: build-image
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}  # ← from login step
         run: |
-          IMAGE_URI=$ECR_REGISTRY/${{ secrets.ECR_REPOSITORY }}:${{ github.sha }}
+          run: |
+          echo "ECR_REGISTRY=${{ secrets.ECR_REGISTRY }}"
+          echo "ECR_REPOSITORY=${{ secrets.ECR_REPOSITORY }}"
+          IMAGE_URI=${{ secrets.ECR_REGISTRY }}/${{ secrets.ECR_REPOSITORY }}:${{ github.sha }}
+          echo "IMAGE_URI=$IMAGE_URI"
           docker build --platform linux/amd64 -t $IMAGE_URI .
           docker push $IMAGE_URI
           echo "image=$IMAGE_URI" >> $GITHUB_OUTPUT
+          echo "Saved output: $(cat $GITHUB_OUTPUT)"   # verify it was written
 
+
+  # ─────────────────────────────────────────────
+  # FASTAPI DEPLOY
+  # ─────────────────────────────────────────────
   deploy-fastapi:
     name: Deploy FastAPI
     runs-on: ubuntu-latest
@@ -46,7 +56,7 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.AWS_REGION }}
+          aws-region: ${{ secrets.AWS_REGION }}          # ← directly from secrets
 
       - name: Render Task Definition
         id: task-def
@@ -64,6 +74,9 @@ jobs:
           cluster: ${{ secrets.ECS_CLUSTER }}
           wait-for-service-stability: true
 
+  # ─────────────────────────────────────────────
+  # CELERY DEPLOY
+  # ─────────────────────────────────────────────
   deploy-celery:
     name: Deploy Celery
     runs-on: ubuntu-latest
@@ -76,7 +89,7 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.AWS_REGION }}
+          aws-region: ${{ secrets.AWS_REGION }}          # ← directly from secrets
 
       - name: Render Task Definition
         id: task-def
