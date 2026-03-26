@@ -28,17 +28,60 @@
         "-Q",
         "default"
       ],
-      "environmentFiles": [
+      "environment": [],
+      "secrets": [
         {
-          "value": "arn:aws:s3:::ritul-bhai-kibalti/.env",
-          "type": "s3"
+          "name": "DATABASE_URL",
+          "valueFrom": "arn:aws:secretsmanager:ap-south-1:702252494235:secret:chatapp-secrets-HyxeOl:DATABASE_URL::"
+        },
+        {
+          "name": "DATABASE_URL1",
+          "valueFrom": "arn:aws:secretsmanager:ap-south-1:702252494235:secret:chatapp-secrets-HyxeOl:DATABASE_URL1::"
+        },
+        {
+          "name": "OPENAI_API_KEY",
+          "valueFrom": "arn:aws:secretsmanager:ap-south-1:702252494235:secret:chatapp-secrets-HyxeOl:OPENAI_API_KEY::"
+        },
+        {
+          "name": "OPENAI_API_KEY2",
+          "valueFrom": "arn:aws:secretsmanager:ap-south-1:702252494235:secret:chatapp-secrets-HyxeOl:OPENAI_API_KEY2::"
+        },
+        {
+          "name": "GOOGLE_API_KEY",
+          "valueFrom": "arn:aws:secretsmanager:ap-south-1:702252494235:secret:chatapp-secrets-HyxeOl:GOOGLE_API_KEY::"
+        },
+        {
+          "name": "GROQ_API_KEY",
+          "valueFrom": "arn:aws:secretsmanager:ap-south-1:702252494235:secret:chatapp-secrets-HyxeOl:GROQ_API_KEY::"
+        },
+        {
+          "name": "GROQ",
+          "valueFrom": "arn:aws:secretsmanager:ap-south-1:702252494235:secret:chatapp-secrets-HyxeOl:GROQ::"
+        },
+        {
+          "name": "TAVILY_API_KEY",
+          "valueFrom": "arn:aws:secretsmanager:ap-south-1:702252494235:secret:chatapp-secrets-HyxeOl:TAVILY_API_KEY::"
+        },
+        {
+          "name": "LANGSMITH_API_KEY",
+          "valueFrom": "arn:aws:secretsmanager:ap-south-1:702252494235:secret:chatapp-secrets-HyxeOl:LANGSMITH_API_KEY::"
+        },
+        {
+          "name": "LANGSMITH_TRACING",
+          "valueFrom": "arn:aws:secretsmanager:ap-south-1:702252494235:secret:chatapp-secrets-HyxeOl:LANGSMITH_TRACING::"
+        },
+        {
+          "name": "LANGSMITH_ENDPOINT",
+          "valueFrom": "arn:aws:secretsmanager:ap-south-1:702252494235:secret:chatapp-secrets-HyxeOl:LANGSMITH_ENDPOINT::"
+        },
+        {
+          "name": "LANGSMITH_PROJECT",
+          "valueFrom": "arn:aws:secretsmanager:ap-south-1:702252494235:secret:chatapp-secrets-HyxeOl:LANGSMITH_PROJECT::"
         }
       ],
       "portMappings": [],
       "mountPoints": [],
       "volumesFrom": [],
-      "ulimits": [],
-      "systemControls": [],
       "logConfiguration": {
         "logDriver": "awslogs",
         "options": {
@@ -46,8 +89,7 @@
           "awslogs-create-group": "true",
           "awslogs-region": "ap-south-1",
           "awslogs-stream-prefix": "ecs"
-        },
-        "secretOptions": []
+        }
       }
     }
   ]
