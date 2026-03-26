@@ -224,6 +224,7 @@ async def classify_and_resolve(
         provider="gemini",
         model="gemini-2.5-flash-lite",
         temperature=0,
+        fallbacks=[
     )
 
     prompt = INTENT_PROMPT.format(

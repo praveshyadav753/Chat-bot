@@ -13,9 +13,6 @@ jobs:
     name: Build & Push Image
     runs-on: ubuntu-latest
 
-    outputs:
-      image: ${{ steps.build-image.outputs.image }}
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -29,32 +26,27 @@ jobs:
 
       - name: Login to ECR
         uses: aws-actions/amazon-ecr-login@v2
-        id: login-ecr
 
       - name: Build & Push Image
-        id: build-image
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY }}
-          IMAGE_TAG: ${{ github.sha }}
         run: |
           set -e
 
-          echo "Starting build..."
-
-          IMAGE_URI=${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}
+          IMAGE_URI=702252494235.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/${{ secrets.ECR_REPOSITORY }}:${{ github.sha }}
 
           echo "IMAGE_URI=$IMAGE_URI"
 
           docker build --platform linux/amd64 -t "$IMAGE_URI" .
           docker push "$IMAGE_URI"
 
-          # ✅ Set output properly
-          echo "image=$IMAGE_URI" >> "$GITHUB_OUTPUT"
+          echo "$IMAGE_URI" > image.txt
+          echo "Saved IMAGE:"
+          cat image.txt
 
-          # ✅ Debug output
-          echo "---- GITHUB OUTPUT ----"
-          cat "$GITHUB_OUTPUT"
+      - name: Upload Image Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: image
+          path: image.txt
 
   # ─────────────────────────────────────────────
   # FASTAPI DEPLOY
@@ -65,13 +57,26 @@ jobs:
     needs: build
 
     steps:
+      - name: Download Image Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: image
+
+      - name: Read Image
+        run: |
+          IMAGE=$(cat image.txt)
+          echo "IMAGE=$IMAGE"
+          echo "IMAGE=$IMAGE" >> $GITHUB_ENV
+
+      - name: Fail if image is empty
+        run: |
+          if [ -z "$IMAGE" ]; then
+            echo "❌ IMAGE is EMPTY"
+            exit 1
+          fi
+
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Debug Image From Build
-        run: |
-          echo "Image received from build job:"
-          echo "${{ needs.build.outputs.image }}"
 
       - name: Configure AWS
         uses: aws-actions/configure-aws-credentials@v4
@@ -86,7 +91,7 @@ jobs:
         with:
           task-definition: taskdef.json
           container-name: ${{ secrets.CONTAINER_NAME }}
-          image: ${{ needs.build.outputs.image }}
+          image: ${{ env.IMAGE }}
 
       - name: Deploy FastAPI
         uses: aws-actions/amazon-ecs-deploy-task-definition@v1
@@ -105,13 +110,26 @@ jobs:
     needs: build
 
     steps:
+      - name: Download Image Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: image
+
+      - name: Read Image
+        run: |
+          IMAGE=$(cat image.txt)
+          echo "IMAGE=$IMAGE"
+          echo "IMAGE=$IMAGE" >> $GITHUB_ENV
+
+      - name: Fail if image is empty
+        run: |
+          if [ -z "$IMAGE" ]; then
+            echo "❌ IMAGE is EMPTY"
+            exit 1
+          fi
+
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Debug Image From Build
-        run: |
-          echo "Image received from build job:"
-          echo "${{ needs.build.outputs.image }}"
 
       - name: Configure AWS
         uses: aws-actions/configure-aws-credentials@v4
@@ -126,7 +144,7 @@ jobs:
         with:
           task-definition: taskdef-celery.json
           container-name: ${{ secrets.CONTAINER_NAME_CELERY }}
-          image: ${{ needs.build.outputs.image }}
+          image: ${{ env.IMAGE }}
 
       - name: Deploy Celery
         uses: aws-actions/amazon-ecs-deploy-task-definition@v1
