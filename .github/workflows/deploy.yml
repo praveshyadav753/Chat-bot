@@ -1,52 +1,105 @@
-name: Deploy ChatApp to Fargate
+name: ChatApp + Celery — CI/CD
 
 on:
   push:
     branches:
       - deployement
 
+env:
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+
 jobs:
-  deploy:
+  # ─────────────────────────────────────────────
+  # BUILD IMAGE (COMMON FOR BOTH)
+  # ─────────────────────────────────────────────
+  build:
+    name:  Build & Push Image
     runs-on: ubuntu-latest
+    outputs:
+      image: ${{ steps.build-image.outputs.image }}
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
+      - uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.AWS_REGION }}
+          aws-region: ${{ env.AWS_REGION }}
 
-      - name: Login to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2
+      - uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Build, tag, push image to ECR
+      - name: Build & Push
         id: build-image
         run: |
           IMAGE_TAG=${{ github.sha }}
           IMAGE_URI=${{ secrets.ECR_REGISTRY }}/${{ secrets.ECR_REPOSITORY }}:$IMAGE_TAG
-
           docker build --platform linux/amd64 -t $IMAGE_URI .
           docker push $IMAGE_URI
-
           echo "image=$IMAGE_URI" >> $GITHUB_OUTPUT
 
-      - name: Update task definition with new image
+  # ─────────────────────────────────────────────
+  # FASTAPI DEPLOY
+  # ─────────────────────────────────────────────
+  deploy-fastapi:
+    name: Deploy FastAPI
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Render Task Definition
         id: task-def
         uses: aws-actions/amazon-ecs-render-task-definition@v1
         with:
           task-definition: taskdef.json
           container-name: ${{ secrets.CONTAINER_NAME }}
-          image: ${{ steps.build-image.outputs.image }}
+          image: ${{ needs.build.outputs.image }}
 
-      - name: Deploy to existing ECS service
+      - name: Deploy FastAPI
         uses: aws-actions/amazon-ecs-deploy-task-definition@v1
         with:
           task-definition: ${{ steps.task-def.outputs.task-definition }}
           service: ${{ secrets.ECS_SERVICE }}
+          cluster: ${{ secrets.ECS_CLUSTER }}
+          wait-for-service-stability: true
+
+  # ─────────────────────────────────────────────
+  # CELERY DEPLOY (RUNS IN PARALLEL :rocket:)
+  # ─────────────────────────────────────────────
+  deploy-celery:
+    name:  Deploy Celery
+    runs-on: ubuntu-latest
+    needs: build   
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Render Task Definition
+        id: task-def
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: taskdef-celery.json
+          container-name: ${{ secrets.CONTAINER_NAME_CELERY }}
+          image: ${{ needs.build.outputs.image }}
+
+      - name: Deploy Celery
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v1
+        with:
+          task-definition: ${{ steps.task-def.outputs.task-definition }}
+          service: ${{ secrets.ECS_SERVICE_CELERY }}
           cluster: ${{ secrets.ECS_CLUSTER }}
           wait-for-service-stability: true

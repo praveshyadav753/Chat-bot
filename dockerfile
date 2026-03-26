@@ -64,17 +64,22 @@
 #      "--workers", "1", \
 #      "--log-level", "info"]
 
-
 FROM python:3.12-slim
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
 WORKDIR /app
 
-# Only install what's absolutely needed
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq5 \
     libmagic1 \
+    libmagic-dev \
+    poppler-utils \
+    tesseract-ocr \
+    libgl1-mesa-glx \
+    libglib2.0-0 \
+    libreoffice \
+    pandoc \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
@@ -82,17 +87,20 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev
 
+# Force headless opencv — replaces GUI version pulled by unstructured
+RUN .venv/bin/pip install opencv-python-headless
+
 # Copy source code
 COPY . .
 
-RUN mkdir -p uploads chroma_db logs
+RUN mkdir -p chroma_db logs
 
 ENV PATH="/app/.venv/bin:$PATH"
 ENV VIRTUAL_ENV="/app/.venv"
 
 EXPOSE 8000
 
-HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=10s --start-period=90s --retries=3 \
     CMD curl -f http://localhost:8000/ || exit 1
 
 CMD ["uvicorn", "app.main:app", \
