@@ -1,0 +1,54 @@
+{
+  "family": "chatapp-celery",
+  "executionRoleArn": "arn:aws:iam::702252494235:role/ecsTaskExecutionRole",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "2048",
+  "memory": "8192",
+  "runtimePlatform": {
+    "cpuArchitecture": "X86_64",
+    "operatingSystemFamily": "LINUX"
+  },
+  "volumes": [],
+  "placementConstraints": [],
+  "containerDefinitions": [
+    {
+      "name": "celery",
+      "image": "702252494235.dkr.ecr.ap-south-1.amazonaws.com/chatbot-backend:latest",
+      "cpu": 2048,
+      "essential": true,
+      "command": [
+        "celery",
+        "-A",
+        "app.celery_app",
+        "worker",
+        "--loglevel=info",
+        "--concurrency=2",
+        "--pool=prefork",
+        "-Q",
+        "default"
+      ],
+      "environmentFiles": [
+        {
+          "value": "arn:aws:s3:::ritul-bhai-kibalti/.env",
+          "type": "s3"
+        }
+      ],
+      "portMappings": [],
+      "mountPoints": [],
+      "volumesFrom": [],
+      "ulimits": [],
+      "systemControls": [],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/chatapp-celery",
+          "awslogs-create-group": "true",
+          "awslogs-region": "ap-south-1",
+          "awslogs-stream-prefix": "ecs"
+        },
+        "secretOptions": []
+      }
+    }
+  ]
+}

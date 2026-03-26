@@ -30,21 +30,29 @@ async def upload_document(
 
         # ── Upload to S3 ──────────────────────────────────────────────────────
         try:
-            file_contents = await file.read()
-            s3_client.put_object(
-                Bucket=settings.S3_BUCKET,
-                Key=s3_key,
-                Body=file_contents,
-                ContentType=file.content_type or "application/octet-stream",
+            # file_contents = await file.read()
+            # s3_client.put_object(
+            #     Bucket=settings.S3_BUCKET,
+            #     Key=s3_key,
+            #     Body=file_contents,
+            #     ContentType=file.content_type or "application/octet-stream",
+            # )
+            s3_client.upload_fileobj(
+                file.file,  # streams in chunks
+                settings.S3_BUCKET,
+                s3_key,
+                ExtraArgs={
+                    "ContentType": file.content_type or "application/octet-stream"
+                },
             )
         except (BotoCoreError, ClientError) as e:
             raise HTTPException(status_code=500, detail=f"S3 upload failed: {str(e)}")
 
-        # ── Save DB record ────────────────────────────────────────────────────
+        # ── Save DB record
         new_doc = Document(
             id=file_id,
             filename=file.filename,
-            file_path=s3_key,          # store S3 key, not a local path
+            file_path=s3_key,  # store S3 key, not a local path
             uploaded_by=user.id,
             access_level=user.access_level,
             department=user.department,
@@ -54,7 +62,7 @@ async def upload_document(
         db.add(new_doc)
         await db.commit()
 
-        # ── Dispatch Celery task ──────────────────────────────────────────────
+        # ── Dispatch Celery task
         store_rag_doc.delay(
             s3_key=s3_key,
             document_id=file_id,
@@ -64,10 +72,12 @@ async def upload_document(
             department=user.department,
         )
 
-        uploaded_docs.append({
-            "document_id": file_id,
-            "filename": file.filename,
-            "status": "PROCESSING",
-        })
+        uploaded_docs.append(
+            {
+                "document_id": file_id,
+                "filename": file.filename,
+                "status": "PROCESSING",
+            }
+        )
 
     return {"documents": uploaded_docs}

@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import Annotated, Optional
+from typing import Optional
 import os
 from dotenv import load_dotenv
 from app.core.config import settings
@@ -12,12 +12,12 @@ load_dotenv()
 
 if key := os.getenv("GOOGLE_API_KEY"):
     os.environ["GOOGLE_API_KEY"] = key
-
 if key := os.getenv("OPENAI_API_KEY"):
     os.environ["OPENAI_API_KEY"] = key
-
 if key := os.getenv("GROQ_API_KEY"):
     os.environ["GROQ_API_KEY"] = key
+
+
 class LLMProvider(str, Enum):
     OPENAI = "openai"
     GROQ = "groq"
@@ -27,51 +27,81 @@ class LLMProvider(str, Enum):
 class LLMFactory:
 
     @staticmethod
-    def create_llm(
-        provider: Optional[LLMProvider] = None,          #str | None = None,
-        model: str | None = None,
-        temperature: float = 0.3,
-        max_tokens: int | None = None,
-        streaming:bool =False
+    def _build_single(
+        provider: str,
+        model: str | None,
+        temperature: float,
+        max_tokens: int | None,
+        streaming: bool,
     ):
-        """
-        Create LLM dynamically.
-        If provider/model not passed → fallback to settings.
-        """
-        provider = provider if provider else settings.llm_provider
-
+        """Build a single LLM instance without fallbacks."""
         if provider == "openai":
-            model = model or settings.OPENAI_MODEL
             return ChatOpenAI(
-                model=model,
+                model=model or settings.OPENAI_MODEL,
                 temperature=temperature,
                 max_tokens=max_tokens,
                 streaming=streaming,
             )
-
         elif provider == "groq":
-            model = model or settings.GROQ_MODEL
             return ChatGroq(
-                model=model,
+                model=model or settings.GROQ_MODEL,
                 temperature=temperature,
                 max_tokens=max_tokens,
                 streaming=streaming,
             )
-
         elif provider == "gemini":
-            model = model or settings.GEMINI_MODEL
             return ChatGoogleGenerativeAI(
-                model=model,
+                model=model or settings.GEMINI_MODEL,
                 temperature=temperature,
                 max_output_tokens=max_tokens,
                 streaming=streaming,
-                
-            
             )
-
         else:
             raise ValueError(f"Unsupported LLM provider: {provider}")
-        
+
+    @staticmethod
+    def create_llm(
+        provider: Optional[LLMProvider] = None,
+        model: str | None = None,
+        temperature: float = 0.3,
+        max_tokens: int | None = None,
+        streaming: bool = False,
+        fallbacks: list[dict] | None = None,
+    ):
+        """
+        Create LLM dynamically with optional fallbacks.
+
+        fallbacks: list of dicts with provider/model to try on failure.
+
+        Example:
+            LLMFactory.create_llm(
+                provider="openai",
+                fallbacks=[
+                    {"provider": "groq", "model": "llama-3.1-8b-instant"},
+                    {"provider": "gemini"},
+                ]
+            )
+        """
+        provider = provider or settings.llm_provider
+
+        primary = LLMFactory._build_single(provider, model, temperature, max_tokens, streaming)
+
+        if not fallbacks:
+            return primary
+
+        fallback_llms = [
+            LLMFactory._build_single(
+                fb.get("provider", settings.llm_provider),
+                fb.get("model", None),
+                fb.get("temperature", temperature),
+                fb.get("max_tokens", max_tokens),
+                fb.get("streaming", streaming),
+            )
+            for fb in fallbacks
+        ]
+
+        return primary.with_fallbacks(fallback_llms)
+
 
 SYSTEM_PROMPT = """
 You are an AI assistant.
@@ -81,4 +111,4 @@ Rules:
 - If context is empty and question requires documents, say:
   "I don't have enough information."
 - Do not hallucinate.
-"""        
+"""

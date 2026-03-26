@@ -33,10 +33,10 @@ def publish_status(document_id: str, status: str, session_id: str, user_id: int)
     )
 
 
-@celery_app.task(bind=True)
+@celery_app.task(bind=True, max_retries=3, default_retry_delay=10)
 def store_rag_doc(
     self,
-    s3_key: str,               # ← was file_path, now an S3 key e.g. "uploads/uuid_name.pdf"
+    s3_key: str,
     document_id: str,
     user_id: int,
     session_id: Optional[str],
@@ -45,6 +45,7 @@ def store_rag_doc(
 ):
     db = sync_session_maker()
     tmp_path = None
+    doc = None  # ← initialize early
 
     try:
         logger.warning("Processing document...")
@@ -56,60 +57,58 @@ def store_rag_doc(
 
         doc.status = "PROCESSING"
         db.commit()
-        publish_status(document_id, "PROCESSING", session_id=session_id, user_id=user_id)
+        publish_status(document_id, "PROCESSING", session_id, user_id)
 
-        # ── Download from S3 to a temp file ──────────────────────────────────
+        # ── Download from S3 
         suffix = os.path.splitext(s3_key)[-1] or ".tmp"
-        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-            tmp_path = tmp.name
+        tmp_fd, tmp_path = tempfile.mkstemp(suffix=suffix)
+        os.close(tmp_fd)
 
         try:
             s3_client.download_file(settings.S3_BUCKET, s3_key, tmp_path)
         except (BotoCoreError, ClientError) as e:
-            logger.error(f"[ERROR] Failed to download from S3: {s3_key} — {e}")
-            doc.status = "FAILED"
-            db.commit()
-            publish_status(document_id, "FAILED", session_id, user_id=user_id)
-            return False
+            logger.error(f"S3 download failed: {s3_key} — {e}")
+            try:
+                raise self.retry(exc=e, countdown=2 ** self.request.retries)
+            except self.MaxRetriesExceededError:
+                doc.status = "FAILED"
+                db.commit()
+                publish_status(document_id, "FAILED", session_id, user_id)
+                return False
 
-        # ── Process the local temp file ───────────────────────────────────────
-        docs = process_document(
-            tmp_path,
-            document_id,
-            user_id,
-            access_level,
-            department,
-        )
+        # ── Process document 
+        docs = process_document(tmp_path, document_id, user_id, access_level, department)
 
         if not docs:
             doc.status = "FAILED"
             db.commit()
-            publish_status(document_id, "FAILED", session_id, user_id=user_id)
+            publish_status(document_id, "FAILED", session_id, user_id)
             return False
 
-        # ── Store embeddings ──────────────────────────────────────────────────
+        # ── Store embeddings 
         store_documents(docs)
 
-        # ── Mark ready ────────────────────────────────────────────────────────
+        # ── Mark ready 
         doc.status = "READY"
         db.commit()
-        publish_status(document_id, "READY", session_id, user_id=user_id)
+        publish_status(document_id, "READY", session_id, user_id)
 
         logger.warning("Document stored successfully")
         return True
 
     except Exception as e:
-        logger.error(f"Error: {str(e)}")
-
-        if "doc" in locals() and doc:
+        logger.error(f"Unhandled error: {str(e)}")
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        if doc:
             doc.status = "FAILED"
             db.commit()
-            publish_status(document_id, "FAILED", session_id, user_id=user_id)
-
+            publish_status(document_id, "FAILED", session_id, user_id)
         raise e
 
     finally:
-        # ── Always clean up the temp file ─────────────────────────────────────
         if tmp_path and os.path.exists(tmp_path):
             try:
                 os.unlink(tmp_path)
