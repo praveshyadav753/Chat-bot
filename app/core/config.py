@@ -23,9 +23,9 @@ class Settings(BaseSettings):
     # CELERY_RESULT_BACKEND: str = "redis://redis:6379/1"
     # REDIS_URL :str = "redis://redis:6379/0"
 
-    CELERY_BROKER_URL :str = "rediss://master.chatbot-cluster-disable.cg2xct.aps1.cache.amazonaws.com:6379"
-    CELERY_RESULT_BACKEND: str = "rediss://master.chatbot-cluster-disable.cg2xct.aps1.cache.amazonaws.com:6379"
-    REDIS_URL :str = "rediss://master.chatbot-cluster-disable.cg2xct.aps1.cache.amazonaws.com:6379"
+    CELERY_BROKER_URL: str = "rediss://master.chatbot-cluster-disable.cg2xct.aps1.cache.amazonaws.com:6379/0"
+    CELERY_RESULT_BACKEND: str = "rediss://master.chatbot-cluster-disable.cg2xct.aps1.cache.amazonaws.com:6379/1"
+    REDIS_URL: str = "rediss://master.chatbot-cluster-disable.cg2xct.aps1.cache.amazonaws.com:6379/2"
 
     # openai  groq
     # CELERY_BROKER_URL :str = "redis://localhost:6379/0"
