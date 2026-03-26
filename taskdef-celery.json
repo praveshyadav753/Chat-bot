@@ -1,91 +1,54 @@
 {
-    "taskDefinitionArn": "arn:aws:ecs:ap-south-1:702252494235:task-definition/chatapp-celery:4",
-    "containerDefinitions": [
+  "family": "chatapp-celery",
+  "executionRoleArn": "arn:aws:iam::702252494235:role/ecsTaskExecutionRole",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "2048",
+  "memory": "8192",
+  "runtimePlatform": {
+    "cpuArchitecture": "X86_64",
+    "operatingSystemFamily": "LINUX"
+  },
+  "volumes": [],
+  "placementConstraints": [],
+  "containerDefinitions": [
+    {
+      "name": "celery",
+      "image": "702252494235.dkr.ecr.ap-south-1.amazonaws.com/chatbot-backend:latest",
+      "cpu": 2048,
+      "essential": true,
+      "command": [
+        "celery",
+        "-A",
+        "app.celery_app",
+        "worker",
+        "--loglevel=info",
+        "--concurrency=2",
+        "--pool=prefork",
+        "-Q",
+        "default"
+      ],
+      "environmentFiles": [
         {
-            "name": "celery",
-            "image": "702252494235.dkr.ecr.ap-south-1.amazonaws.com/chatbot-backend:latest",
-            "cpu": 2048,
-            "portMappings": [
-                {
-                    "name": "celery-80-tcp",
-                    "containerPort": 80,
-                    "hostPort": 80,
-                    "protocol": "tcp",
-                    "appProtocol": "http"
-                }
-            ],
-            "essential": true,
-            "command": [
-                "celery",
-                "-A",
-                "app.celery_app",
-                "worker",
-                "--loglevel=info",
-                "--concurrency=2",
-                "--pool=prefork",
-                "-Q",
-                "default"
-            ],
-            "environmentFiles": [],
-            "mountPoints": [],
-            "volumesFrom": [],
-            "ulimits": [],
-            "logConfiguration": {
-                "logDriver": "awslogs",
-                "options": {
-                    "awslogs-group": "/ecs/chatapp-celery",
-                    "awslogs-create-group": "true",
-                    "awslogs-region": "ap-south-1",
-                    "awslogs-stream-prefix": "ecs"
-                },
-                "secretOptions": []
-            },
-            "systemControls": []
+          "value": "arn:aws:s3:::ritul-bhai-kibalti/.env",
+          "type": "s3"
         }
-    ],
-    "family": "chatapp-celery",
-    "executionRoleArn": "arn:aws:iam::702252494235:role/ecsTaskExecutionRole",
-    "networkMode": "awsvpc",
-    "revision": 4,
-    "volumes": [],
-    "status": "ACTIVE",
-    "requiresAttributes": [
-        {
-            "name": "com.amazonaws.ecs.capability.logging-driver.awslogs"
+      ],
+      "portMappings": [],
+      "mountPoints": [],
+      "volumesFrom": [],
+      "ulimits": [],
+      "systemControls": [],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/chatapp-celery",
+          "awslogs-create-group": "true",
+          "awslogs-region": "ap-south-1",
+          "awslogs-stream-prefix": "ecs"
         },
-        {
-            "name": "ecs.capability.execution-role-awslogs"
-        },
-        {
-            "name": "com.amazonaws.ecs.capability.docker-remote-api.1.19"
-        },
-        {
-            "name": "com.amazonaws.ecs.capability.docker-remote-api.1.18"
-        },
-        {
-            "name": "ecs.capability.task-eni"
-        },
-        {
-            "name": "com.amazonaws.ecs.capability.docker-remote-api.1.29"
-        }
-    ],
-    "placementConstraints": [],
-    "compatibilities": [
-        "EC2",
-        "FARGATE",
-        "MANAGED_INSTANCES"
-    ],
-    "requiresCompatibilities": [
-        "FARGATE"
-    ],
-    "cpu": "2048",
-    "memory": "8192",
-    "runtimePlatform": {
-        "cpuArchitecture": "X86_64",
-        "operatingSystemFamily": "LINUX"
-    },
-    "registeredAt": "2026-03-25T11:06:01.079Z",
-    "registeredBy": "arn:aws:iam::702252494235:root",
-    "enableFaultInjection": false,
-    "tags": []
+        "secretOptions": []
+      }
+    }
+  ]
 }
