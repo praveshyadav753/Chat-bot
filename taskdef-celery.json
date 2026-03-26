@@ -3,7 +3,7 @@
     "containerDefinitions": [
         {
             "name": "celery",
-            "image": "702252494235.dkr.ecr.ap-south-1.amazonaws.com/chatapp:latest",
+            "image": "702252494235.dkr.ecr.ap-south-1.amazonaws.com/chatbot-backend:latest",
             "cpu": 2048,
             "portMappings": [
                 {
