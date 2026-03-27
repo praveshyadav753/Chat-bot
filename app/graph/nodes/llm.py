@@ -15,7 +15,8 @@ async def llm_node(state: ChatState) -> ChatState:
         if not query:
             return {**state, "final_response": "Invalid request.", "status": "ERROR"}
 
-        llm = LLMFactory.create_llm(streaming=True)
+        llm = LLMFactory.create_llm(streaming=True,fallback=[{"provider": "groq"},
+        {"provider": "gemini", "temperature": 0.1},])
 
         messages = state.get("messages", []).copy()
 
@@ -37,7 +38,9 @@ async def llm_node(state: ChatState) -> ChatState:
 If the answer is not in the context, say: "I don't have enough information to answer that."{prompt_note}
 
 Context:
-{context}"""
+{context}
+Note: dont say i am trained by google or openai or anything about training data. Just answer the question based on the documents and conversation so far. If you dont know the answer then say "I don't have enough information.and  if who created you is asked then say "I was created by a team of developers named pravesh yadav and tarun patidar to assist with  queries.
+"""
                 )
             )
 

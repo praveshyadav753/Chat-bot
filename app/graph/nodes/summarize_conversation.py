@@ -48,6 +48,7 @@ async def summarize_conversation(state: ChatState) -> ChatState:
             provider="gemini",
             model="gemini-2.5-flash-lite",
             temperature=0.3,
+            fallbacks=[{"provider": "groq", "model": "groq-1b-instant"}],
         )
 
         response      = await llm.ainvoke(messages_for_llm)
