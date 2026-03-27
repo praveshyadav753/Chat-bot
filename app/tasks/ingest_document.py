@@ -25,12 +25,15 @@ def publish_status(document_id: str, status: str, session_id: str, user_id: int)
     payload = {
         "document_id": document_id,
         "status": status,
-        "session_id": session_id,
+        "session_id": session_id or "",   
     }
-    redis_client.publish(
-        f"document_status:{user_id}",
-        json.dumps(payload),
-    )
+    try:
+        redis_client.publish(
+            f"document_status:{user_id}",
+            json.dumps(payload),
+        )
+    except Exception as e:
+        logger.error(f"[publish_status] Redis publish failed: {e}")
 
 
 @celery_app.task(bind=True, max_retries=3, default_retry_delay=10)
