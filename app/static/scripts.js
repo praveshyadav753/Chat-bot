@@ -10,6 +10,13 @@ let isStreaming     = false;
 let uploadedFiles   = [];       // active session's files only
 let placeholderHidden = false;
 
+function getTempId() {
+  if (window.crypto?.randomUUID) {
+    return crypto.randomUUID();
+  }
+  return `id-${Math.random().toString(36).slice(2)}-${Date.now()}`;
+}
+
 // ── DOM refs ──────────────────────────────────────────────────────────────────
 const fileInput    = document.getElementById("documents");
 const chatBox      = document.getElementById("chat-box");
@@ -47,7 +54,7 @@ msgInput.addEventListener("keydown", e => {
 // ── File input ────────────────────────────────────────────────────────────────
 fileInput.addEventListener("change", () => {
   Array.from(fileInput.files).forEach(file => {
-    const tempId = crypto.randomUUID();
+    const tempId = getTempId();
     const entry  = { tempId, file, document_id: null, status: "uploading" };
     uploadedFiles.push(entry);
     renderChip(entry);
