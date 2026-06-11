@@ -4,11 +4,12 @@
 
 {% block content %}
 
-<div class="card p-8 w-full max-w-md">
+<div class="min-h-[calc(100vh-52px)] flex items-center justify-center px-4 py-10">
+  <div class="card p-8 w-full max-w-md">
 
-<h2 class="text-xl font-semibold mb-6 text-center">
-Login
-</h2>
+    <h2 class="text-xl font-semibold mb-6 text-center">
+      Login
+    </h2>
 
 {% if error %}
 <div class="bg-red-500/20 text-red-300 p-3 rounded mb-4 text-sm">
@@ -43,6 +44,7 @@ Login
 
 </form>
 
+  </div>
 </div>
 
 {% endblock %}

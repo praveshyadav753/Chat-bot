@@ -13,16 +13,19 @@ services:
       - "8000:8000"
     env_file:
       - .env
-    # environment:
-      # DATABASE_URL: ${DATABASE_URL}
-      # DATABASE_URL1: ${DATABASE_URL1}
-      # REDIS_URL: ${REDIS_URL}
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@db:5432/chatbot
+      DATABASE_URL1: postgresql://postgres:postgres@db:5432/chatbot
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
     volumes:
       - uploads_data:/app/uploads
       - chroma_data:/app/chroma_db
     depends_on:
-     
       redis:
+        condition: service_healthy
+      db:
         condition: service_healthy
     networks:
       - chatbot_net
@@ -39,15 +42,19 @@ services:
               "-Q", "default"]
     env_file:
       - .env
-    # environment:
-    #   DATABASE_URL: ${DATABASE_URL}
-    #   DATABASE_URL1: ${DATABASE_URL1}
-    #   REDIS_URL: ${REDIS_URL}
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@db:5432/chatbot
+      DATABASE_URL1: postgresql://postgres:postgres@db:5432/chatbot
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
     volumes:
       - uploads_data:/app/uploads
       - chroma_data:/app/chroma_db
     depends_on:
       redis:
+        condition: service_healthy
+      db:
         condition: service_healthy
     networks:
       - chatbot_net
@@ -67,6 +74,25 @@ services:
       - chatbot_net
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Postgres database for local development
+  db:
+    image: postgres:16-alpine
+    container_name: chatbot_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: chatbot
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - chatbot_net
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -91,6 +117,7 @@ volumes:
   redis_data:
   uploads_data:
   chroma_data:
+  postgres_data:
 
 networks:
   chatbot_net:

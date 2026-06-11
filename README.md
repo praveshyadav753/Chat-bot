@@ -100,39 +100,82 @@ migrations/                 # Alembic versions
 ### Requirements
 
 - Python 3.12+
-- PostgreSQL 15+ with pgvector extension enabled
-- Redis
+- Docker and Docker Compose
+- Local PostgreSQL and Redis are provided by Docker Compose, so you do not need to install them separately for local development.
 
 ### Environment variables
 
+Create a file named `.env` in the project root with at least the following values:
+
 ```env
-DATABASE_URL=postgresql+asyncpg://user:pass@host:5432/db?ssl=require
-DATABASE_URL1=postgresql://user:pass@host:5432/db?sslmode=require
-REDIS_URL=redis://localhost:6379/0
-TAVILY_API_KEY=tvly-...
-GOOGLE_API_KEY=...
-SECRET_KEY=...
+# App configuration
+SECRET_KEY=your-secret-key
 ALGORITHM=HS256
+OPENAI_API_KEY=your-openai-key
+GEMINI_MODEL=gemini-2.5-flash
+OPENAI_MODEL=gpt-5-nano
+GROQ_MODEL=
+llm_provider=gemini
+
+# Optional external tool/API keys
+TAVILY_API_KEY=your-tavily-key
+GOOGLE_API_KEY=your-google-key
+
+# Local Redis and Celery settings (Docker Compose already sets Redis URLs for services)
+CELERY_BROKER_URL=redis://redis:6379/0
+CELERY_RESULT_BACKEND=redis://redis:6379/1
+REDIS_URL=redis://redis:6379/0
 ```
 
-### Run
+> If you are using the local Docker Compose stack, the `DATABASE_URL` and `DATABASE_URL1` values are already set in `compose.yml` for the `api` and `celery` services.
+
+### Run locally with Docker Compose
 
 ```bash
-# Install
-pip install -r requirements.txt
+cd /home/lap-71/Desktop/chatbot/chatbot
 
-# Database migrations
-alembic upgrade head
+# Build the app image
+docker compose build --no-cache
 
-# Enable pgvector
-psql -d yourdb -c "CREATE EXTENSION IF NOT EXISTS vector;"
+# Start the full stack in detached mode
+docker compose up -d
 
-# Start API
-uvicorn app.main:app --reload --port 8000
-
-# Start Celery worker (separate terminal)
-celery -A app.celery_app worker --loglevel=info
+# Watch the API logs
+docker compose logs -f api
 ```
+
+The local stack exposes:
+
+- API: http://localhost:8000
+- Redis: 6379
+- PostgreSQL: 5432
+- Flower: http://localhost:5555
+
+### Rebuild cleanly from scratch
+
+If you want a fresh database state, remove the Postgres volume before starting:
+
+```bash
+docker compose down
+docker volume rm chatbot_postgres_data
+docker compose up -d --build
+```
+
+### Run without Docker (optional)
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+alembic upgrade head
+psql -d yourdb -c "CREATE EXTENSION IF NOT EXISTS vector;"
+uvicorn app.main:app --reload --port 8000
+```
+
+### Notes
+
+- The Docker Compose stack already creates a local `postgres:16-alpine` database and a Redis instance.
+- If your app cannot connect, make sure the `.env` file exists and contains valid API keys and secrets.
 
 ---
 
